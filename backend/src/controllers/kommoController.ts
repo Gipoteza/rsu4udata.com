@@ -15,6 +15,23 @@ router.get('/status', requireAuth, async (_req: Request, res: Response) => {
   }
 });
 
+// GET /api/integrations/kommo/leads-daily/:branchId — лиды по тегу за N дней по дням
+router.get('/leads-daily/:branchId', requireAuth, async (req: Request, res: Response) => {
+  const branchId = Number(req.params.branchId);
+  const days = Number(req.query.days) || 14;
+  const tag = (req.query.tag as string) || 'РЕКЛАМА';
+  if (![1, 2, 3, 4].includes(branchId)) {
+    return res.status(400).json({ error: 'Invalid branchId' });
+  }
+  try {
+    const result = await KommoService.getLeadsByTagDaily(branchId, days, tag);
+    return res.json(result);
+  } catch (err: any) {
+    console.error('[KOMMO] leads-daily error:', err.message);
+    return res.status(400).json({ error: err.message });
+  }
+});
+
 // GET /api/integrations/kommo/test/:branchId — проверка реальных данных
 router.get('/test/:branchId', requireAuth, async (req: Request, res: Response) => {
   const branchId = Number(req.params.branchId);

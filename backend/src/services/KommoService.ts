@@ -211,6 +211,79 @@ export const KommoService = {
     };
   },
 
+  // Возвращает количество лидов с заданным тегом за последние N дней,
+  // сгруппированное по дням (от сегодня назад).
+  async getLeadsByTagDaily(branchId: number, days = 14, tagName = 'РЕКЛАМА') {
+    const acc = await db('kommo_accounts').where({ branch_id: branchId }).first();
+    if (!acc || !acc.access_token_enc) throw new Error('Аккаунт не подключён');
+
+    const token = OAuthHelper.decrypt(acc.access_token_enc);
+    const headers = { Authorization: `Bearer ${token}` };
+
+    // Границы периода (по локальным дням)
+    const now = new Date();
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    const fromDate = new Date(todayEnd);
+    fromDate.setDate(fromDate.getDate() - (days - 1));
+    fromDate.setHours(0, 0, 0, 0);
+
+    const fromTs = Math.floor(fromDate.getTime() / 1000);
+    const toTs = Math.floor(todayEnd.getTime() / 1000);
+
+    // Готовим карту дней: YYYY-MM-DD -> count
+    const counts = new Map<string, number>();
+    const labels: string[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(todayEnd);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      counts.set(key, 0);
+      labels.push(key);
+    }
+
+    const tagLower = tagName.toLowerCase();
+    let page = 1;
+    const maxPages = 40; // защита от бесконечного цикла
+
+    while (page <= maxPages) {
+      const url = `${acc.base_domain}/api/v4/leads?with=tags&limit=250&page=${page}`
+        + `&filter[created_at][from]=${fromTs}&filter[created_at][to]=${toTs}`;
+      const resp = await fetch(url, { headers });
+      if (resp.status === 204) break; // нет данных
+      if (!resp.ok) {
+        throw new Error(`Kommo вернул ${resp.status} при запросе лидов`);
+      }
+      const data = (await resp.json()) as any;
+      const leads: any[] = data?._embedded?.leads || [];
+      if (leads.length === 0) break;
+
+      for (const lead of leads) {
+        const tags: any[] = lead?._embedded?.tags || [];
+        const hasTag = tags.some((t) => String(t.name || '').toLowerCase() === tagLower);
+        if (!hasTag) continue;
+        const createdTs = Number(lead.created_at) * 1000;
+        const key = new Date(createdTs).toISOString().slice(0, 10);
+        if (counts.has(key)) counts.set(key, (counts.get(key) || 0) + 1);
+      }
+
+      // Если есть следующая страница — продолжаем
+      const hasNext = !!data?._links?.next;
+      if (!hasNext) break;
+      page++;
+    }
+
+    const series = labels.map((k) => counts.get(k) || 0);
+    const total = series.reduce((a, b) => a + b, 0);
+
+    return {
+      tag: tagName,
+      days,
+      labels, // YYYY-MM-DD от старого к сегодня
+      series, // количество лидов по дням
+      total,
+    };
+  },
+
   redirectUri(): string {
     return REDIRECT_URI;
   },
