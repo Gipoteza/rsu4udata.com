@@ -36,9 +36,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {open && (
           <div style={styles.menu}>
-            <div style={styles.menuSection}>Дашборды</div>
-            <button style={styles.menuItem} onClick={() => go('/dashboard')}>📊 CEO Overview</button>
-
             <div style={styles.menuSection}>Интеграции</div>
             <button style={styles.menuItem} onClick={() => go('/dashboard/integrations')}>🔌 Kommo CRM</button>
             <button style={{ ...styles.menuItem, opacity: 0.5 }} disabled>📘 Facebook Ads (скоро)</button>
