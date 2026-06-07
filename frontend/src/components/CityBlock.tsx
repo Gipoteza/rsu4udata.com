@@ -18,7 +18,7 @@ export default function CityBlock({ branchId, cityName }: { branchId: number; ci
   const [adsets, setAdsets] = useState<AdsetRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [rangeIdx, setRangeIdx] = useState(1); // 14 days
+  const [rangeIdx, setRangeIdx] = useState(0); // 7 days
   const [granularity, setGranularity] = useState('Daily');
   const [customMode, setCustomMode] = useState(false);
   const [fromDate, setFromDate] = useState('');
