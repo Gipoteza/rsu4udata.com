@@ -31,8 +31,6 @@ export default function LoginPage() {
           <span style={styles.logoSub}>Marketing Dashboard</span>
         </div>
 
-        <h1 style={styles.title}>Вход в систему</h1>
-
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.field}>
             <label style={styles.label}>Email</label>
