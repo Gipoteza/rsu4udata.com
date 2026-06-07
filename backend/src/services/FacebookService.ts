@@ -211,4 +211,56 @@ export const FacebookService = {
     }
     return { branchId, days, labels, series, total: Number(series.reduce((a, b) => a + b, 0).toFixed(2)) };
   },
+
+  // Группы объявлений (adsets) по городу: расход, лиды, стоимость лида
+  async getCityAdsets(branchId: number, days = 30) {
+    const acc = await db('facebook_accounts').where({ id: SINGLETON_ID }).first();
+    if (!acc || !acc.access_token_enc) throw new Error('Facebook не подключён');
+    const map = await db('fb_campaign_map').where({ branch_id: branchId }).first();
+    let names: string[] = [];
+    try { names = map ? JSON.parse(map.campaign_names) : []; } catch { names = []; }
+    if (names.length === 0) return { rows: [], note: 'Кампании не привязаны' };
+
+    const token = OAuthHelper.decrypt(acc.access_token_enc);
+    const since = new Date();
+    since.setDate(since.getDate() - (days - 1));
+    const sinceStr = since.toISOString().slice(0, 10);
+    const untilStr = new Date().toISOString().slice(0, 10);
+
+    const url = `${GRAPH}/${acc.ad_account_id}/insights`
+      + `?level=adset&fields=adset_name,campaign_name,spend,actions`
+      + `&time_range={'since':'${sinceStr}','until':'${untilStr}'}&limit=500`
+      + `&access_token=${encodeURIComponent(token)}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Facebook вернул ${resp.status} при запросе adsets`);
+    const data = (await resp.json()) as any;
+    const rows: any[] = data?.data || [];
+
+    const namesLower = names.map((n) => n.toLowerCase());
+    const agg = new Map<string, { spend: number; leads: number }>();
+    rows.forEach((r) => {
+      const cn = String(r.campaign_name || '').toLowerCase();
+      if (!namesLower.some((n) => cn.includes(n))) return;
+      const name = r.adset_name || '—';
+      const spend = Number(r.spend) || 0;
+      let leads = 0;
+      const actions: any[] = r.actions || [];
+      actions.forEach((a) => {
+        if (String(a.action_type).includes('lead')) leads += Number(a.value) || 0;
+      });
+      const cur = agg.get(name) || { spend: 0, leads: 0 };
+      cur.spend += spend;
+      cur.leads += leads;
+      agg.set(name, cur);
+    });
+
+    const result = Array.from(agg.entries()).map(([name, v]) => ({
+      adsetName: name,
+      spend: Number(v.spend.toFixed(2)),
+      leads: v.leads,
+      costPerLead: v.leads > 0 ? Number((v.spend / v.leads).toFixed(2)) : null,
+    }));
+    result.sort((a, b) => b.spend - a.spend);
+    return { rows: result };
+  },
 };

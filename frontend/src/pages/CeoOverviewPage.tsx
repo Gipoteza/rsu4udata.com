@@ -15,6 +15,13 @@ interface SpendDaily {
   note?: string;
 }
 
+interface AdsetRow {
+  adsetName: string;
+  spend: number;
+  leads: number;
+  costPerLead: number | null;
+}
+
 const ODESA_BRANCH_ID = 2;
 
 // Доступные периоды (переключаются стрелками)
@@ -33,6 +40,7 @@ export default function CeoOverviewPage() {
   const [error, setError] = useState('');
   const [rangeIdx, setRangeIdx] = useState(2); // 30 days по умолчанию
   const [granularity, setGranularity] = useState('Daily');
+  const [adsets, setAdsets] = useState<AdsetRow[]>([]);
 
   const days = RANGES[rangeIdx];
 
@@ -40,13 +48,15 @@ export default function CeoOverviewPage() {
     setLoading(true);
     setError('');
     try {
-      const [leadsRes, spendRes] = await Promise.allSettled([
+      const [leadsRes, spendRes, adsetsRes] = await Promise.allSettled([
         api.get<LeadsDaily>(`/integrations/kommo/leads-daily/${ODESA_BRANCH_ID}?days=${days}`),
         api.get<SpendDaily>(`/integrations/facebook/city-spend/${ODESA_BRANCH_ID}?days=${days}`),
+        api.get<{ rows: AdsetRow[] }>(`/integrations/facebook/city-adsets/${ODESA_BRANCH_ID}?days=${days}`),
       ]);
       if (leadsRes.status === 'fulfilled') setLeads(leadsRes.value.data);
       else setError('Не удалось загрузить лиды из Kommo');
       if (spendRes.status === 'fulfilled') setSpend(spendRes.value.data);
+      if (adsetsRes.status === 'fulfilled') setAdsets(adsetsRes.value.data.rows || []);
     } catch {
       setError('Ошибка загрузки данных');
     } finally {
@@ -144,6 +154,38 @@ export default function CeoOverviewPage() {
           <ReactApexChart options={options} series={series} type="line" height={380} />
         )}
       </div>
+
+      {/* Таблица групп объявлений со стоимостью лида */}
+      <div style={styles.tableBox}>
+        <div style={styles.tableTitle}>Группы объявлений · стоимость лида</div>
+        {adsets.length === 0 ? (
+          <div style={styles.tableEmpty}>Нет данных по группам (привяжите кампании на странице Facebook).</div>
+        ) : (
+          <div style={styles.tableHeaderRow}>
+            <span style={styles.thName}>Группа</span>
+            <span style={styles.thNum}>Лиды</span>
+            <span style={styles.thNum}>Расход</span>
+            <span style={styles.thNum}>Цена лида</span>
+          </div>
+        )}
+        {adsets.map((row, i) => {
+          const maxSpend = Math.max(...adsets.map((a) => a.spend), 1);
+          const barPct = Math.round((row.spend / maxSpend) * 100);
+          return (
+            <div key={i} style={styles.tableRow}>
+              <div style={styles.nameCell}>
+                <div style={{ ...styles.bar, width: `${barPct}%` }} />
+                <span style={styles.nameText}>{row.adsetName}</span>
+              </div>
+              <span style={styles.numCell}>{row.leads}</span>
+              <span style={styles.numCell}>{row.spend} zł</span>
+              <span style={styles.cplCell}>
+                {row.costPerLead != null ? `${row.costPerLead} zł` : '—'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -203,4 +245,25 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '10px 14px', backgroundColor: '#fffbeb', border: '1px solid #fde68a',
     borderRadius: '8px', color: '#92400e', fontSize: '13px', marginBottom: '16px',
   },
+  tableBox: {
+    marginTop: '20px', background: '#fff', borderRadius: '12px',
+    border: '1px solid #e2e8f0', padding: '16px 20px',
+  },
+  tableTitle: { fontSize: '15px', fontWeight: 600, color: '#1a1a2e', marginBottom: '12px' },
+  tableEmpty: { fontSize: '13px', color: '#94a3b8', padding: '8px 0' },
+  tableHeaderRow: {
+    display: 'grid', gridTemplateColumns: '1fr 70px 90px 100px', gap: '8px',
+    padding: '0 0 8px 0', borderBottom: '1px solid #f1f5f9',
+  },
+  thName: { fontSize: '12px', color: '#94a3b8', fontWeight: 600 },
+  thNum: { fontSize: '12px', color: '#94a3b8', fontWeight: 600, textAlign: 'right' },
+  tableRow: {
+    display: 'grid', gridTemplateColumns: '1fr 70px 90px 100px', gap: '8px',
+    alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f8fafc',
+  },
+  nameCell: { position: 'relative', display: 'flex', alignItems: 'center', minHeight: '28px', borderRadius: '6px', overflow: 'hidden' },
+  bar: { position: 'absolute', left: 0, top: 0, bottom: 0, background: '#eef2ff', borderRadius: '6px' },
+  nameText: { position: 'relative', fontSize: '13px', color: '#1a1a2e', padding: '0 8px', zIndex: 1 },
+  numCell: { fontSize: '13px', color: '#334155', textAlign: 'right' },
+  cplCell: { fontSize: '13px', color: '#4f46e5', fontWeight: 600, textAlign: 'right' },
 };

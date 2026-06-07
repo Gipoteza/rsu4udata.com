@@ -100,4 +100,16 @@ router.get('/city-spend/:branchId', requireAuth, async (req: Request, res: Respo
   }
 });
 
+// GET /api/integrations/facebook/city-adsets/:branchId?days=30
+router.get('/city-adsets/:branchId', requireAuth, async (req: Request, res: Response) => {
+  const branchId = Number(req.params.branchId);
+  const days = Number(req.query.days) || 30;
+  try {
+    const result = await FacebookService.getCityAdsets(branchId, days);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
 export default router;
