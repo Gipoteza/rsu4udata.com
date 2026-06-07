@@ -60,27 +60,49 @@ app.get('/api/setup', async (_req, res) => {
         t.timestamp('created_at').defaultTo(db.fn.now());
       });
       await db('branches').insert([
-        { id: 1, name: 'Branch 1' },
-        { id: 2, name: 'Branch 2' },
-        { id: 3, name: 'Branch 3' },
-        { id: 4, name: 'Branch 4' },
+        { id: 1, name: 'Киев' },
+        { id: 2, name: 'Одесса' },
+        { id: 3, name: 'Львов' },
+        { id: 4, name: 'Варшава' },
       ]);
       console.log('[SETUP] branches table created');
+    } else {
+      // Обновляем названия филиалов на города
+      await db('branches').where({ id: 1 }).update({ name: 'Киев' });
+      await db('branches').where({ id: 2 }).update({ name: 'Одесса' });
+      await db('branches').where({ id: 3 }).update({ name: 'Львов' });
+      await db('branches').where({ id: 4 }).update({ name: 'Варшава' });
+      console.log('[SETUP] branch names updated to cities');
     }
 
     if (!await db.schema.hasTable('kommo_accounts')) {
       await db.schema.createTable('kommo_accounts', (t) => {
         t.increments('id').primary();
         t.integer('branch_id').notNullable().unique().references('id').inTable('branches').onDelete('CASCADE');
-        t.string('base_domain', 255).notNullable();
-        t.text('access_token_enc').notNullable();
-        t.text('refresh_token_enc').notNullable();
-        t.timestamp('expires_at').notNullable();
+        t.string('client_id', 255).nullable();
+        t.text('client_secret_enc').nullable();
+        t.string('base_domain', 255).nullable();
+        t.text('access_token_enc').nullable();
+        t.text('refresh_token_enc').nullable();
+        t.timestamp('expires_at').nullable();
         t.string('status', 32).notNullable().defaultTo('not_connected');
         t.timestamp('created_at').defaultTo(db.fn.now());
         t.timestamp('updated_at').defaultTo(db.fn.now());
       });
       console.log('[SETUP] kommo_accounts table created');
+    } else {
+      // Добавляем недостающие колонки если таблица старая
+      const cols = ['client_id', 'client_secret_enc'];
+      for (const col of cols) {
+        const has = await db.schema.hasColumn('kommo_accounts', col);
+        if (!has) {
+          await db.schema.alterTable('kommo_accounts', (t) => {
+            if (col === 'client_id') t.string('client_id', 255).nullable();
+            if (col === 'client_secret_enc') t.text('client_secret_enc').nullable();
+          });
+          console.log(`[SETUP] added column ${col}`);
+        }
+      }
     }
 
     const email = 'basegipoteza@gmail.com';
