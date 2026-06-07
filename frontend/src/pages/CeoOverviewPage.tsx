@@ -7,6 +7,7 @@ export default function CeoOverviewPage() {
     <div style={styles.page}>
       <CityBlock branchId={2} cityName="Одесса" />
       <CityBlock branchId={1} cityName="Киев" />
+      <CityBlock branchId={4} cityName="Варшава" />
     </div>
   );
 }
