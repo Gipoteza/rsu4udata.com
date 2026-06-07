@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import bcrypt from 'bcrypt';
 import authController from './controllers/authController';
+import kommoController from './controllers/kommoController';
 import db from './database/db';
 
 const app = express();
@@ -23,6 +24,7 @@ app.use((req, _res, next) => {
 });
 
 app.use('/api/auth', authController);
+app.use('/api/integrations/kommo', kommoController);
 
 // Создаёт таблицы и admin пользователя
 app.get('/api/setup', async (_req, res) => {
@@ -66,18 +68,33 @@ app.get('/api/setup', async (_req, res) => {
       console.log('[SETUP] branches table created');
     }
 
+    if (!await db.schema.hasTable('kommo_accounts')) {
+      await db.schema.createTable('kommo_accounts', (t) => {
+        t.increments('id').primary();
+        t.integer('branch_id').notNullable().unique().references('id').inTable('branches').onDelete('CASCADE');
+        t.string('base_domain', 255).notNullable();
+        t.text('access_token_enc').notNullable();
+        t.text('refresh_token_enc').notNullable();
+        t.timestamp('expires_at').notNullable();
+        t.string('status', 32).notNullable().defaultTo('not_connected');
+        t.timestamp('created_at').defaultTo(db.fn.now());
+        t.timestamp('updated_at').defaultTo(db.fn.now());
+      });
+      console.log('[SETUP] kommo_accounts table created');
+    }
+
     const email = 'basegipoteza@gmail.com';
     const existing = await db('users').where({ email }).first();
     if (existing) {
       console.log('[SETUP] User already exists');
-      return res.json({ ok: true, message: 'User already exists', email });
+      return res.json({ ok: true, message: 'Setup complete (user exists)', email });
     }
 
     const hash = await bcrypt.hash('Lets#-bro-Pass#323255', 12);
     await db('users').insert({ email, password_hash: hash });
     console.log('[SETUP] Admin user created');
 
-    return res.json({ ok: true, message: 'Admin created! Login now.', email });
+    return res.json({ ok: true, message: 'Setup complete! Admin created.', email });
   } catch (err: any) {
     console.error('[SETUP] Error:', err.message);
     return res.status(500).json({ error: err.message });

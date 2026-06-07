@@ -3,7 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import DashboardLayout from './components/DashboardLayout';
 import LoginPage from './pages/LoginPage';
+import IntegrationsPage from './pages/IntegrationsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -11,28 +13,42 @@ const queryClient = new QueryClient({
   },
 });
 
+function DashboardHome() {
+  return (
+    <div style={{ padding: '32px', fontFamily: 'sans-serif' }}>
+      <h1 style={{ color: '#1a1a2e' }}>CEO Overview</h1>
+      <p style={{ color: '#8892a4' }}>Дашборд в разработке</p>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {/* basename не нужен — nginx раздаёт всё с корня */}
         <BrowserRouter>
           <Routes>
-            {/* rsu4udata.com/admin/ — форма входа */}
+            {/* Форма входа на корне */}
             <Route path="/" element={<LoginPage />} />
-            <Route path="/admin" element={<LoginPage />} />
-            <Route path="/admin/" element={<LoginPage />} />
-            {/* Защищённые страницы */}
+
+            {/* Защищённые страницы дашборда */}
             <Route
-              path="/dashboard/*"
+              path="/dashboard"
               element={
                 <ProtectedRoute>
-                  <div style={{ padding: '24px', fontFamily: 'sans-serif' }}>
-                    <h1>Dashboard — coming soon</h1>
-                  </div>
+                  <DashboardLayout><DashboardHome /></DashboardLayout>
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/dashboard/integrations"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout><IntegrationsPage /></DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
