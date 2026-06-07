@@ -166,7 +166,7 @@ export const FacebookService = {
   },
 
   // Расход по городу за N дней (по привязанным кампаниям)
-  async getCitySpend(branchId: number, days = 14) {
+  async getCitySpend(branchId: number, days = 14, from?: string, to?: string) {
     const acc = await db('facebook_accounts').where({ id: SINGLETON_ID }).first();
     if (!acc || !acc.access_token_enc) throw new Error('Facebook не подключён');
     const map = await db('fb_campaign_map').where({ branch_id: branchId }).first();
@@ -177,10 +177,17 @@ export const FacebookService = {
     }
 
     const token = OAuthHelper.decrypt(acc.access_token_enc);
-    const since = new Date();
-    since.setDate(since.getDate() - (days - 1));
-    const sinceStr = since.toISOString().slice(0, 10);
-    const untilStr = new Date().toISOString().slice(0, 10);
+    let sinceStr: string;
+    let untilStr: string;
+    if (from && to) {
+      sinceStr = from;
+      untilStr = to;
+    } else {
+      const since = new Date();
+      since.setDate(since.getDate() - (days - 1));
+      sinceStr = since.toISOString().slice(0, 10);
+      untilStr = new Date().toISOString().slice(0, 10);
+    }
 
     const url = `${GRAPH}/${acc.ad_account_id}/insights`
       + `?level=campaign&fields=campaign_name,spend,impressions,clicks&time_increment=1`
@@ -202,9 +209,9 @@ export const FacebookService = {
 
     const labels: string[] = [];
     const series: number[] = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
+    const startD = new Date(`${sinceStr}T00:00:00`);
+    const endD = new Date(`${untilStr}T00:00:00`);
+    for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
       const key = d.toISOString().slice(0, 10);
       labels.push(key);
       series.push(Number((byDay.get(key) || 0).toFixed(2)));
@@ -213,7 +220,7 @@ export const FacebookService = {
   },
 
   // Группы объявлений (adsets) по городу: расход, лиды, стоимость лида
-  async getCityAdsets(branchId: number, days = 30) {
+  async getCityAdsets(branchId: number, days = 30, from?: string, to?: string) {
     const acc = await db('facebook_accounts').where({ id: SINGLETON_ID }).first();
     if (!acc || !acc.access_token_enc) throw new Error('Facebook не подключён');
     const map = await db('fb_campaign_map').where({ branch_id: branchId }).first();
@@ -222,10 +229,17 @@ export const FacebookService = {
     if (names.length === 0) return { rows: [], note: 'Кампании не привязаны' };
 
     const token = OAuthHelper.decrypt(acc.access_token_enc);
-    const since = new Date();
-    since.setDate(since.getDate() - (days - 1));
-    const sinceStr = since.toISOString().slice(0, 10);
-    const untilStr = new Date().toISOString().slice(0, 10);
+    let sinceStr: string;
+    let untilStr: string;
+    if (from && to) {
+      sinceStr = from;
+      untilStr = to;
+    } else {
+      const since = new Date();
+      since.setDate(since.getDate() - (days - 1));
+      sinceStr = since.toISOString().slice(0, 10);
+      untilStr = new Date().toISOString().slice(0, 10);
+    }
 
     const url = `${GRAPH}/${acc.ad_account_id}/insights`
       + `?level=adset&fields=adset_name,campaign_name,spend,actions`

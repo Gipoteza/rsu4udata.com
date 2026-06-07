@@ -213,7 +213,7 @@ export const KommoService = {
 
   // Возвращает количество лидов с заданным тегом(ами) за последние N дней,
   // сгруппированное по дням (от сегодня назад).
-  async getLeadsByTagDaily(branchId: number, days = 14, tagName: string | string[] = 'РЕКЛАМА') {
+  async getLeadsByTagDaily(branchId: number, days = 14, tagName: string | string[] = 'РЕКЛАМА', from?: string, to?: string) {
     const acc = await db('kommo_accounts').where({ branch_id: branchId }).first();
     if (!acc || !acc.access_token_enc) throw new Error('Аккаунт не подключён');
 
@@ -222,12 +222,22 @@ export const KommoService = {
 
     const tagList = (Array.isArray(tagName) ? tagName : [tagName]).map((t) => t.toLowerCase());
 
-    // Границы периода (по локальным дням)
-    const now = new Date();
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-    const fromDate = new Date(todayEnd);
-    fromDate.setDate(fromDate.getDate() - (days - 1));
-    fromDate.setHours(0, 0, 0, 0);
+    // Границы периода: либо явные from/to, либо последние N дней
+    let fromDate: Date;
+    let todayEnd: Date;
+    if (from && to) {
+      fromDate = new Date(`${from}T00:00:00`);
+      todayEnd = new Date(`${to}T23:59:59`);
+    } else {
+      const now = new Date();
+      todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+      fromDate = new Date(todayEnd);
+      fromDate.setDate(fromDate.getDate() - (days - 1));
+      fromDate.setHours(0, 0, 0, 0);
+    }
+
+    // Количество дней в диапазоне
+    const dayCount = Math.round((todayEnd.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
 
     const fromTs = Math.floor(fromDate.getTime() / 1000);
     const toTs = Math.floor(todayEnd.getTime() / 1000);
@@ -235,7 +245,7 @@ export const KommoService = {
     // Готовим карту дней: YYYY-MM-DD -> count
     const counts = new Map<string, number>();
     const labels: string[] = [];
-    for (let i = days - 1; i >= 0; i--) {
+    for (let i = dayCount - 1; i >= 0; i--) {
       const d = new Date(todayEnd);
       d.setDate(d.getDate() - i);
       const key = d.toISOString().slice(0, 10);
@@ -337,24 +347,32 @@ export const KommoService = {
 
   // Лиды по выбранным тегам (из kommo_tag_map) за N дней по дням.
   // Если переданы явные теги — используем их, иначе берём сохранённые.
-  async getLeadsByTagsDaily(branchId: number, days = 14, explicitTags?: string[]) {
+  async getLeadsByTagsDaily(branchId: number, days = 14, explicitTags?: string[], from?: string, to?: string) {
     let tags = explicitTags;
     if (!tags || tags.length === 0) {
       const map = await db('kommo_tag_map').where({ branch_id: branchId }).first();
       try { tags = map ? JSON.parse(map.tag_names) : []; } catch { tags = []; }
     }
     if (!tags || tags.length === 0) {
-      // нет выбранных тегов — пустой результат с метками
       const labels: string[] = [];
-      const now = new Date();
-      for (let i = days - 1; i >= 0; i--) {
-        const d = new Date(now);
-        d.setDate(d.getDate() - i);
-        labels.push(d.toISOString().slice(0, 10));
+      // Если заданы from/to — строим по ним, иначе по days
+      if (from && to) {
+        const start = new Date(`${from}T00:00:00`);
+        const end = new Date(`${to}T00:00:00`);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          labels.push(d.toISOString().slice(0, 10));
+        }
+      } else {
+        const now = new Date();
+        for (let i = days - 1; i >= 0; i--) {
+          const d = new Date(now);
+          d.setDate(d.getDate() - i);
+          labels.push(d.toISOString().slice(0, 10));
+        }
       }
       return { tags: [], days, labels, series: labels.map(() => 0), total: 0, note: 'Теги не выбраны' };
     }
-    return this.getLeadsByTagDaily(branchId, days, tags);
+    return this.getLeadsByTagDaily(branchId, days, tags, from, to);
   },
 
   redirectUri(): string {

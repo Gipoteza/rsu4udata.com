@@ -62,13 +62,15 @@ router.get('/leads-daily/:branchId', requireAuth, async (req: Request, res: Resp
   const branchId = Number(req.params.branchId);
   const days = Number(req.query.days) || 14;
   const tagParam = req.query.tag as string | undefined;
+  const from = req.query.from as string | undefined;
+  const to = req.query.to as string | undefined;
   if (![1, 2, 3, 4].includes(branchId)) {
     return res.status(400).json({ error: 'Invalid branchId' });
   }
   try {
     // Если тег передан явно — используем его, иначе берём сохранённые теги города
     const explicitTags = tagParam ? [tagParam] : undefined;
-    const result = await KommoService.getLeadsByTagsDaily(branchId, days, explicitTags);
+    const result = await KommoService.getLeadsByTagsDaily(branchId, days, explicitTags, from, to);
     return res.json(result);
   } catch (err: any) {
     console.error('[KOMMO] leads-daily error:', err.message);

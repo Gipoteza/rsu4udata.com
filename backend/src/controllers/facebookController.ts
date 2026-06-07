@@ -92,8 +92,10 @@ router.post('/campaign-map/:branchId', requireAuth, async (req: Request, res: Re
 router.get('/city-spend/:branchId', requireAuth, async (req: Request, res: Response) => {
   const branchId = Number(req.params.branchId);
   const days = Number(req.query.days) || 14;
+  const from = req.query.from as string | undefined;
+  const to = req.query.to as string | undefined;
   try {
-    const result = await FacebookService.getCitySpend(branchId, days);
+    const result = await FacebookService.getCitySpend(branchId, days, from, to);
     return res.json(result);
   } catch (err: any) {
     return res.status(400).json({ error: err.message });
@@ -104,8 +106,10 @@ router.get('/city-spend/:branchId', requireAuth, async (req: Request, res: Respo
 router.get('/city-adsets/:branchId', requireAuth, async (req: Request, res: Response) => {
   const branchId = Number(req.params.branchId);
   const days = Number(req.query.days) || 30;
+  const from = req.query.from as string | undefined;
+  const to = req.query.to as string | undefined;
   try {
-    const result = await FacebookService.getCityAdsets(branchId, days);
+    const result = await FacebookService.getCityAdsets(branchId, days, from, to);
     return res.json(result);
   } catch (err: any) {
     return res.status(400).json({ error: err.message });

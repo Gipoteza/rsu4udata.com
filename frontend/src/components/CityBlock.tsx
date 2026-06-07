@@ -20,17 +20,23 @@ export default function CityBlock({ branchId, cityName }: { branchId: number; ci
   const [error, setError] = useState('');
   const [rangeIdx, setRangeIdx] = useState(1); // 14 days
   const [granularity, setGranularity] = useState('Daily');
+  const [customMode, setCustomMode] = useState(false);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   const days = RANGES[rangeIdx];
 
   const load = async () => {
     setLoading(true);
     setError('');
+    // Параметры периода: либо custom from/to, либо days
+    const useCustom = customMode && fromDate && toDate;
+    const q = useCustom ? `from=${fromDate}&to=${toDate}` : `days=${days}`;
     try {
       const [leadsRes, spendRes, adsetsRes] = await Promise.allSettled([
-        api.get<LeadsDaily>(`/integrations/kommo/leads-daily/${branchId}?days=${days}`),
-        api.get<SpendDaily>(`/integrations/facebook/city-spend/${branchId}?days=${days}`),
-        api.get<{ rows: AdsetRow[] }>(`/integrations/facebook/city-adsets/${branchId}?days=${days}`),
+        api.get<LeadsDaily>(`/integrations/kommo/leads-daily/${branchId}?${q}`),
+        api.get<SpendDaily>(`/integrations/facebook/city-spend/${branchId}?${q}`),
+        api.get<{ rows: AdsetRow[] }>(`/integrations/facebook/city-adsets/${branchId}?${q}`),
       ]);
       if (leadsRes.status === 'fulfilled') setLeads(leadsRes.value.data);
       else setError('Не удалось загрузить лиды из Kommo');
@@ -90,11 +96,29 @@ export default function CityBlock({ branchId, cityName }: { branchId: number; ci
         <div style={styles.pill}>
           <span style={styles.cityName}>{cityName}</span>
         </div>
-        <div style={styles.rangeGroup}>
-          <button style={{ ...styles.arrow, opacity: canPrev ? 1 : 0.35, cursor: canPrev ? 'pointer' : 'default' }} onClick={() => canPrev && setRangeIdx((i) => i + 1)}>‹</button>
-          <span style={styles.rangeLabel}>{RANGE_LABEL[days]}</span>
-          <button style={{ ...styles.arrow, opacity: canNext ? 1 : 0.35, cursor: canNext ? 'pointer' : 'default' }} onClick={() => canNext && setRangeIdx((i) => i - 1)}>›</button>
-        </div>
+        {!customMode ? (
+          <div style={styles.rangeGroup}>
+            <button style={{ ...styles.arrow, opacity: canPrev ? 1 : 0.35, cursor: canPrev ? 'pointer' : 'default' }} onClick={() => canPrev && setRangeIdx((i) => i + 1)}>‹</button>
+            <span style={styles.rangeLabel}>{RANGE_LABEL[days]}</span>
+            <button style={{ ...styles.arrow, opacity: canNext ? 1 : 0.35, cursor: canNext ? 'pointer' : 'default' }} onClick={() => canNext && setRangeIdx((i) => i - 1)}>›</button>
+          </div>
+        ) : (
+          <div style={styles.customGroup}>
+            <input type="date" style={styles.dateInput} value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+            <span style={styles.dash}>—</span>
+            <input type="date" style={styles.dateInput} value={toDate} onChange={(e) => setToDate(e.target.value)} />
+            <button style={styles.applyBtn} onClick={load} disabled={!fromDate || !toDate}>OK</button>
+          </div>
+        )}
+
+        <button
+          style={{ ...styles.modeBtn, color: customMode ? '#4f46e5' : '#64748b' }}
+          onClick={() => setCustomMode((v) => !v)}
+          title={customMode ? 'Готовые периоды' : 'Свой диапазон'}
+        >
+          {customMode ? 'Периоды' : 'Календарь'}
+        </button>
+
         <div style={styles.dailyPill}>
           <select style={styles.select} value={granularity} onChange={(e) => setGranularity(e.target.value)}>
             <option value="Daily">Daily</option>
@@ -174,6 +198,23 @@ const styles: Record<string, React.CSSProperties> = {
   rangeGroup: { display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 6px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
   arrow: { border: 'none', background: 'none', fontSize: '20px', color: '#64748b', width: '28px', height: '28px', lineHeight: 1, borderRadius: '6px' },
   rangeLabel: { fontSize: '14px', color: '#1a1a2e', fontWeight: 500, padding: '0 8px', minWidth: '92px', textAlign: 'center' },
+  customGroup: {
+    display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', background: '#fff',
+    border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+  },
+  dateInput: {
+    border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 8px', fontSize: '13px',
+    color: '#1a1a2e', outline: 'none', background: '#fafafa',
+  },
+  dash: { color: '#94a3b8' },
+  applyBtn: {
+    border: 'none', borderRadius: '8px', padding: '7px 12px', background: '#4f46e5', color: '#fff',
+    fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+  },
+  modeBtn: {
+    border: '1px solid #e2e8f0', borderRadius: '10px', padding: '9px 14px', background: '#fff',
+    fontSize: '13px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+  },
   dailyPill: { background: '#fff', border: '1px solid #cbd5e1', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', overflow: 'hidden' },
   select: {
     border: 'none', background: 'transparent', WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none',
