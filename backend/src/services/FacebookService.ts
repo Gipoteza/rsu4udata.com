@@ -245,9 +245,10 @@ export const FacebookService = {
       const spend = Number(r.spend) || 0;
       let leads = 0;
       const actions: any[] = r.actions || [];
-      actions.forEach((a) => {
-        if (String(a.action_type).includes('lead')) leads += Number(a.value) || 0;
-      });
+      // Берём только точный тип 'lead', чтобы не дублировать
+      // (Facebook возвращает несколько пересекающихся lead-типов)
+      const leadAction = actions.find((a) => a.action_type === 'lead');
+      if (leadAction) leads = Number(leadAction.value) || 0;
       const cur = agg.get(name) || { spend: 0, leads: 0 };
       cur.spend += spend;
       cur.leads += leads;
