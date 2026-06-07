@@ -107,30 +107,32 @@ export default function CityBlock({ branchId, cityName }: { branchId: number; ci
       {error && <div style={styles.error}>{error}</div>}
       {spend?.note && <div style={styles.note}>Facebook: {spend.note}</div>}
 
-      {/* KPI карточки */}
-      <div style={styles.kpiRow}>
-        <div style={styles.kpiCard}>
-          <div style={styles.kpiLabel}>Лиды</div>
-          <div style={styles.kpiValue}>{totalLeads}</div>
+      {/* Единый блок: KPI сверху + график снизу */}
+      <div style={styles.cardWrap}>
+        <div style={styles.kpiRow}>
+          <div style={styles.kpiCard}>
+            <div style={styles.kpiLabel}>Лиды</div>
+            <div style={styles.kpiValue}>{totalLeads}</div>
+          </div>
+          <div style={styles.kpiDivider} />
+          <div style={styles.kpiCard}>
+            <div style={styles.kpiLabel}>Затраты</div>
+            <div style={styles.kpiValue}>{totalSpend} zł</div>
+          </div>
+          <div style={styles.kpiDivider} />
+          <div style={styles.kpiCard}>
+            <div style={styles.kpiLabel}>Цена лида</div>
+            <div style={styles.kpiValue}>{costPerLead === '—' ? '—' : `${costPerLead} zł`}</div>
+          </div>
         </div>
-        <div style={styles.kpiDivider} />
-        <div style={styles.kpiCard}>
-          <div style={styles.kpiLabel}>Затраты</div>
-          <div style={styles.kpiValue}>{totalSpend} zł</div>
-        </div>
-        <div style={styles.kpiDivider} />
-        <div style={styles.kpiCard}>
-          <div style={styles.kpiLabel}>Цена лида</div>
-          <div style={styles.kpiValue}>{costPerLead === '—' ? '—' : `${costPerLead} zł`}</div>
-        </div>
-      </div>
 
-      <div style={styles.chartBox}>
-        {loading ? (
-          <div style={styles.loading}>Загрузка данных...</div>
-        ) : (
-          <ReactApexChart options={options} series={series} type="line" height={380} />
-        )}
+        <div style={styles.chartArea}>
+          {loading ? (
+            <div style={styles.loading}>Загрузка данных...</div>
+          ) : (
+            <ReactApexChart options={options} series={series} type="line" height={380} />
+          )}
+        </div>
       </div>
 
       <div style={styles.tableBox}>
@@ -181,10 +183,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   refresh: { width: '40px', height: '40px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff', color: '#475569', cursor: 'pointer', fontSize: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
   chartBox: { background: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #e2e8f0', minHeight: '420px' },
-  kpiRow: {
-    display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0',
-    borderRadius: '12px', padding: '16px 24px', marginBottom: '16px', gap: '24px',
+  cardWrap: {
+    background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden',
   },
+  kpiRow: {
+    display: 'flex', alignItems: 'center', padding: '16px 24px',
+    gap: '24px', borderBottom: '1px solid #f1f5f9',
+  },
+  chartArea: { padding: '16px 20px 20px 20px', minHeight: '400px' },
   kpiCard: { display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '120px' },
   kpiLabel: { fontSize: '13px', color: '#8892a4', fontWeight: 500 },
   kpiValue: { fontSize: '26px', fontWeight: 700, color: '#1a1a2e', lineHeight: 1.1 },
