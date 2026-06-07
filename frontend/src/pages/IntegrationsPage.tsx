@@ -35,6 +35,7 @@ export default function IntegrationsPage() {
   const [selectedTags, setSelectedTags] = useState<Record<number, Set<string>>>({});
   const [tagsLoading, setTagsLoading] = useState<Record<number, boolean>>({});
   const [tagsSaving, setTagsSaving] = useState<Record<number, boolean>>({});
+  const [tagSearch, setTagSearch] = useState<Record<number, string>>({});
 
   const loadTagMap = async () => {
     try {
@@ -155,6 +156,24 @@ export default function IntegrationsPage() {
     }
   };
 
+  // Сортировка: выбранные вверху, затем по алфавиту. Плюс фильтр по поиску.
+  const getVisibleTags = (branchId: number) => {
+    const all = availableTags[branchId] || [];
+    const sel = selectedTags[branchId] || new Set<string>();
+    const query = (tagSearch[branchId] || '').toLowerCase().trim();
+
+    const filtered = query
+      ? all.filter((t) => t.name.toLowerCase().includes(query))
+      : all;
+
+    return [...filtered].sort((a, b) => {
+      const aSel = sel.has(a.name) ? 0 : 1;
+      const bSel = sel.has(b.name) ? 0 : 1;
+      if (aSel !== bSel) return aSel - bSel; // выбранные вперёд
+      return a.name.localeCompare(b.name, 'ru');
+    });
+  };
+
   if (loading) return <div style={styles.loading}>Загрузка...</div>;
 
   return (
@@ -230,8 +249,15 @@ export default function IntegrationsPage() {
                     </button>
                   </div>
 
+                  <input
+                    style={styles.tagSearch}
+                    value={tagSearch[b.branchId] || ''}
+                    onChange={(e) => setTagSearch((p) => ({ ...p, [b.branchId]: e.target.value }))}
+                    placeholder="Поиск по тегам..."
+                  />
+
                   <div style={styles.tagList}>
-                    {(availableTags[b.branchId] || []).map((t) => {
+                    {getVisibleTags(b.branchId).map((t) => {
                       const checked = selectedTags[b.branchId]?.has(t.name) || false;
                       return (
                         <label key={t.id} style={styles.tagRow}>
@@ -242,6 +268,9 @@ export default function IntegrationsPage() {
                     })}
                     {(availableTags[b.branchId] || []).length === 0 && !tagsLoading[b.branchId] && (
                       <span style={styles.noTags}>Теги не найдены</span>
+                    )}
+                    {(availableTags[b.branchId] || []).length > 0 && getVisibleTags(b.branchId).length === 0 && (
+                      <span style={styles.noTags}>Ничего не найдено</span>
                     )}
                   </div>
 
@@ -310,6 +339,10 @@ const styles: Record<string, React.CSSProperties> = {
   tagsReload: {
     border: '1px solid #e2e8f0', borderRadius: '6px', background: '#fff', color: '#64748b',
     cursor: 'pointer', fontSize: '14px', width: '28px', height: '28px',
+  },
+  tagSearch: {
+    padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: '8px',
+    fontSize: '13px', color: '#1a1a2e', outline: 'none', backgroundColor: '#fafafa', marginBottom: '8px',
   },
   tagList: {
     display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '160px', overflow: 'auto',
