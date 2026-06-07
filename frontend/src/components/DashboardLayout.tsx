@@ -27,6 +27,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div style={styles.wrap}>
       <div style={styles.topbar} ref={menuRef}>
+        <button style={styles.settingsBtn} onClick={() => navigate('/dashboard')} title="Главная">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <polyline points="9 22 9 12 15 12 15 22" />
+          </svg>
+        </button>
+
         <button style={styles.settingsBtn} onClick={() => setOpen((v) => !v)} title="Настройки">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3" />
@@ -53,14 +60,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
 const styles: Record<string, React.CSSProperties> = {
   wrap: { minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
-  topbar: { position: 'relative', padding: '16px 0 0 24px' },
+  topbar: { position: 'relative', padding: '16px 0 0 24px', display: 'flex', gap: '10px' },
   settingsBtn: {
     width: '40px', height: '40px', borderRadius: '10px', border: '1px solid #e2e8f0',
     background: '#fff', color: '#475569', cursor: 'pointer', display: 'flex',
     alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
   },
   menu: {
-    position: 'absolute', top: '62px', left: '24px', width: '240px', background: '#fff',
+    position: 'absolute', top: '62px', left: '74px', width: '240px', background: '#fff',
     borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
     padding: '8px', zIndex: 50,
   },
