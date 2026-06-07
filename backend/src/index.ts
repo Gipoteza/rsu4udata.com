@@ -41,6 +41,25 @@ app.use((req, _res, next) => {
   next();
 });
 
+// Debug root endpoint
+app.get('/', (_req, res) => {
+  const info = {
+    service: 'RSU4U Backend',
+    status: 'running',
+    port: PORT,
+    env: {
+      NODE_ENV: process.env.NODE_ENV || 'NOT SET',
+      DATABASE_URL: process.env.DATABASE_URL ? 'SET ✓' : 'NOT SET ✗',
+      JWT_SECRET: process.env.JWT_SECRET ? 'SET ✓' : 'NOT SET ✗',
+      FRONTEND_URL: process.env.FRONTEND_URL || 'NOT SET',
+    },
+    endpoints: ['/api/health', '/api/setup', '/api/auth/login', '/api/auth/logout', '/api/auth/me'],
+    timestamp: new Date().toISOString(),
+  };
+  console.log('[ROOT]', JSON.stringify(info));
+  res.json(info);
+});
+
 // Routes
 app.use('/api/auth', authController);
 
