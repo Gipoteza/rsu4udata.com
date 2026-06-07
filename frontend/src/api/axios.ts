@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import axios from 'axios';
 
 // В продакшене VITE_API_URL = https://backend-url.railway.app
