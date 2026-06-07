@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   base: '/admin/',
   server: {
+    // Только для локальной разработки
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
