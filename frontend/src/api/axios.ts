@@ -1,11 +1,12 @@
 /// <reference types="vite/client" />
 import axios from 'axios';
 
-// VITE_API_URL прописывается в Railway как переменная окружения frontend сервиса
-const baseURL = (import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api`
-  : '/api');
+// Захардкоженный fallback если переменная не попала в билд
+const API_URL = import.meta.env.VITE_API_URL || 'https://rsu4udatacombackend-production.up.railway.app';
 
+const baseURL = `${API_URL}/api`;
+
+console.log('[API] VITE_API_URL from env:', import.meta.env.VITE_API_URL);
 console.log('[API] baseURL:', baseURL);
 
 const api = axios.create({
