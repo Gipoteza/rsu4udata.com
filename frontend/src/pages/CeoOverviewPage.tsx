@@ -38,7 +38,7 @@ export default function CeoOverviewPage() {
   const [spend, setSpend] = useState<SpendDaily | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [rangeIdx, setRangeIdx] = useState(2); // 30 days по умолчанию
+  const [rangeIdx, setRangeIdx] = useState(1); // 14 days по умолчанию
   const [granularity, setGranularity] = useState('Daily');
   const [adsets, setAdsets] = useState<AdsetRow[]>([]);
 
