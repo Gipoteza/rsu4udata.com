@@ -1,11 +1,12 @@
 /// <reference types="vite/client" />
 import axios from 'axios';
 
-// В продакшене VITE_API_URL = https://backend-url.railway.app
-// Локально запросы проксируются через vite на localhost:3001
-const baseURL = import.meta.env.VITE_API_URL
+// VITE_API_URL прописывается в Railway как переменная окружения frontend сервиса
+const baseURL = (import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
-  : '/api';
+  : '/api');
+
+console.log('[API] baseURL:', baseURL);
 
 const api = axios.create({
   baseURL,
