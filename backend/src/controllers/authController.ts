@@ -4,10 +4,14 @@ import { requireAuth } from '../middleware/auth';
 
 const router = Router();
 
+const isProd = process.env.NODE_ENV === 'production';
+
+// В production фронтенд и бэкенд на разных доменах (cross-site),
+// поэтому нужен SameSite=None; Secure чтобы cookie отправлялась.
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  secure: isProd,
+  sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
   maxAge: 24 * 60 * 60 * 1000, // 24h
 };
 
@@ -37,7 +41,7 @@ router.post('/logout', requireAuth, async (req: Request, res: Response) => {
       if (payload?.jti) await AuthService.logout(payload.jti);
     } catch { /* ignore */ }
   }
-  res.clearCookie('token');
+  res.clearCookie('token', { httpOnly: true, secure: isProd, sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax' });
   return res.json({ ok: true });
 });
 
