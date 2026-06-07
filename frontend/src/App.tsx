@@ -6,21 +6,13 @@ import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './components/DashboardLayout';
 import LoginPage from './pages/LoginPage';
 import IntegrationsPage from './pages/IntegrationsPage';
+import CeoOverviewPage from './pages/CeoOverviewPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: 1, staleTime: 30_000 },
   },
 });
-
-function DashboardHome() {
-  return (
-    <div style={{ padding: '32px', fontFamily: 'sans-serif' }}>
-      <h1 style={{ color: '#1a1a2e' }}>CEO Overview</h1>
-      <p style={{ color: '#8892a4' }}>Дашборд в разработке</p>
-    </div>
-  );
-}
 
 export default function App() {
   return (
@@ -36,7 +28,7 @@ export default function App() {
               path="/dashboard"
               element={
                 <ProtectedRoute>
-                  <DashboardLayout><DashboardHome /></DashboardLayout>
+                  <DashboardLayout><CeoOverviewPage /></DashboardLayout>
                 </ProtectedRoute>
               }
             />
