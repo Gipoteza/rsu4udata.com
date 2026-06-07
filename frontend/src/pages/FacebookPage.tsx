@@ -8,6 +8,18 @@ interface FbStatus {
   lastSyncedAt: string | null;
 }
 
+interface CityMap {
+  branchId: number;
+  branchName: string;
+  campaignNames: string[];
+}
+
+interface FbCampaign {
+  id: string;
+  name: string;
+  status: string;
+}
+
 const STATUS_LABEL: Record<string, string> = {
   connected: 'Подключён',
   requires_reconnect: 'Требует переподключения',
@@ -29,6 +41,23 @@ export default function FacebookPage() {
   const [notice, setNotice] = useState('');
   const [testResult, setTestResult] = useState('');
 
+  // Привязка кампаний к городам
+  const [cityMaps, setCityMaps] = useState<CityMap[]>([]);
+  const [cityInputs, setCityInputs] = useState<Record<number, string>>({});
+  const [availableCampaigns, setAvailableCampaigns] = useState<FbCampaign[]>([]);
+  const [showCampaigns, setShowCampaigns] = useState(false);
+  const [mapSaving, setMapSaving] = useState<Record<number, boolean>>({});
+
+  const loadCityMaps = async () => {
+    try {
+      const res = await api.get<CityMap[]>('/integrations/facebook/campaign-map');
+      setCityMaps(res.data);
+      const inputs: Record<number, string> = {};
+      res.data.forEach((c) => { inputs[c.branchId] = c.campaignNames.join(', '); });
+      setCityInputs(inputs);
+    } catch { /* таблица может быть пустой */ }
+  };
+
   const load = async () => {
     try {
       const res = await api.get<FbStatus>('/integrations/facebook/status');
@@ -41,7 +70,32 @@ export default function FacebookPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadCityMaps(); }, []);
+
+  const handleLoadCampaigns = async () => {
+    setShowCampaigns(true);
+    try {
+      const res = await api.get<FbCampaign[]>('/integrations/facebook/campaigns');
+      setAvailableCampaigns(res.data);
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Не удалось загрузить кампании');
+    }
+  };
+
+  const handleSaveCityMap = async (branchId: number) => {
+    setMapSaving((p) => ({ ...p, [branchId]: true }));
+    setError(''); setNotice('');
+    const names = (cityInputs[branchId] || '').split(',').map((s) => s.trim()).filter(Boolean);
+    try {
+      await api.post(`/integrations/facebook/campaign-map/${branchId}`, { campaignNames: names });
+      setNotice('Привязка кампаний сохранена');
+      await loadCityMaps();
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Не удалось сохранить');
+    } finally {
+      setMapSaving((p) => ({ ...p, [branchId]: false }));
+    }
+  };
 
   const handleSave = async () => {
     if (!adAccountId || !token) {
@@ -123,12 +177,62 @@ export default function FacebookPage() {
         )}
         {testResult && <div style={styles.testResult}>{testResult}</div>}
       </div>
+
+      {/* Привязка кампаний к городам */}
+      {status?.status === 'connected' && (
+        <div style={styles.citiesSection}>
+          <div style={styles.citiesHeader}>
+            <h2 style={styles.citiesTitle}>Кампании по городам</h2>
+            <button style={styles.linkBtn} onClick={handleLoadCampaigns}>
+              Показать кампании из Facebook
+            </button>
+          </div>
+          <p style={styles.citiesHint}>
+            Укажите названия рекламных кампаний для каждого города (через запятую).
+            Достаточно части названия — система найдёт кампании, содержащие этот текст.
+          </p>
+
+          {showCampaigns && (
+            <div style={styles.campaignsList}>
+              <strong style={{ fontSize: '13px' }}>Доступные кампании ({availableCampaigns.length}):</strong>
+              <ul style={styles.ul}>
+                {availableCampaigns.map((c) => (
+                  <li key={c.id} style={styles.li}>
+                    {c.name} <span style={styles.campStatus}>{c.status}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div style={styles.cityGrid}>
+            {cityMaps.map((c) => (
+              <div key={c.branchId} style={styles.cityCard}>
+                <div style={styles.cityName}>{c.branchName}</div>
+                <input
+                  style={styles.input}
+                  value={cityInputs[c.branchId] || ''}
+                  onChange={(e) => setCityInputs((p) => ({ ...p, [c.branchId]: e.target.value }))}
+                  placeholder="Например: Одесса лиды, ODE_camp"
+                />
+                <button
+                  style={styles.citysave}
+                  disabled={mapSaving[c.branchId]}
+                  onClick={() => handleSaveCityMap(c.branchId)}
+                >
+                  {mapSaving[c.branchId] ? 'Сохранение...' : 'Сохранить'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { padding: '32px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', maxWidth: '520px' },
+  page: { padding: '32px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', maxWidth: '900px' },
   title: { fontSize: '24px', fontWeight: 700, color: '#1a1a2e', margin: '0 0 4px 0' },
   subtitle: { fontSize: '14px', color: '#8892a4', margin: '0 0 20px 0' },
   loading: { padding: '32px', color: '#8892a4' },
@@ -173,5 +277,30 @@ const styles: Record<string, React.CSSProperties> = {
   testResult: {
     marginTop: '8px', padding: '8px 10px', backgroundColor: '#f8fafc', borderRadius: '6px',
     fontSize: '12px', color: '#334155', lineHeight: 1.4,
+  },
+  citiesSection: { marginTop: '28px' },
+  citiesHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' },
+  citiesTitle: { fontSize: '18px', fontWeight: 700, color: '#1a1a2e', margin: 0 },
+  citiesHint: { fontSize: '13px', color: '#8892a4', margin: '4px 0 16px 0', lineHeight: 1.5 },
+  linkBtn: {
+    border: '1px solid #1877f2', borderRadius: '8px', background: '#fff', color: '#1877f2',
+    fontSize: '13px', fontWeight: 600, padding: '8px 12px', cursor: 'pointer',
+  },
+  campaignsList: {
+    background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px',
+    padding: '12px 16px', marginBottom: '16px', maxHeight: '220px', overflow: 'auto',
+  },
+  ul: { margin: '8px 0 0 0', padding: '0 0 0 18px' },
+  li: { fontSize: '13px', color: '#334155', marginBottom: '4px' },
+  campStatus: { fontSize: '11px', color: '#94a3b8', marginLeft: '6px' },
+  cityGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' },
+  cityCard: {
+    background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px',
+    padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px',
+  },
+  cityName: { fontSize: '16px', fontWeight: 600, color: '#1a1a2e' },
+  citysave: {
+    padding: '8px', border: 'none', borderRadius: '8px', backgroundColor: '#1877f2',
+    color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', marginTop: '4px',
   },
 };
