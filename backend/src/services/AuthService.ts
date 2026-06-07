@@ -7,8 +7,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const TOKEN_TTL_HOURS = 24;
 
 export interface JwtPayload {
-  sub: number;   // user id
-  jti: string;   // unique token id
+  sub: string | number; // user id (jsonwebtoken может вернуть string)
+  jti: string;
   iat: number;
   exp: number;
 }
@@ -48,7 +48,7 @@ export const AuthService = {
   async validateToken(token: string) {
     let payload: JwtPayload;
     try {
-      payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
+      payload = jwt.verify(token, JWT_SECRET) as unknown as JwtPayload;
     } catch {
       throw new Error('INVALID_TOKEN');
     }

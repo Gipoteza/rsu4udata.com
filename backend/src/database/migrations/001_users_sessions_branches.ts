@@ -21,7 +21,7 @@ export async function up(knex: Knex): Promise<void> {
 
   // 4 филиала
   await knex.schema.createTable('branches', (t) => {
-    t.integer('id').primary().checkIn([1, 2, 3, 4]);
+    t.integer('id').primary().checkIn(['1', '2', '3', '4']);
     t.string('name', 100).notNullable();
     t.timestamp('created_at').defaultTo(knex.fn.now());
   });
