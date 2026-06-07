@@ -130,6 +130,16 @@ app.get('/api/setup', async (_req, res) => {
       console.log('[SETUP] fb_campaign_map table created');
     }
 
+    if (!await db.schema.hasTable('kommo_tag_map')) {
+      await db.schema.createTable('kommo_tag_map', (t) => {
+        t.integer('branch_id').primary().references('id').inTable('branches').onDelete('CASCADE');
+        t.text('tag_names').notNullable().defaultTo('[]');
+        t.timestamp('created_at').defaultTo(db.fn.now());
+        t.timestamp('updated_at').defaultTo(db.fn.now());
+      });
+      console.log('[SETUP] kommo_tag_map table created');
+    }
+
     const email = 'basegipoteza@gmail.com';
     const existing = await db('users').where({ email }).first();
     if (existing) {

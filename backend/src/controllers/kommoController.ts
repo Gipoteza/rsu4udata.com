@@ -15,16 +15,60 @@ router.get('/status', requireAuth, async (_req: Request, res: Response) => {
   }
 });
 
-// GET /api/integrations/kommo/leads-daily/:branchId — лиды по тегу за N дней по дням
-router.get('/leads-daily/:branchId', requireAuth, async (req: Request, res: Response) => {
+// GET /api/integrations/kommo/tags/:branchId — список тегов из Kommo
+router.get('/tags/:branchId', requireAuth, async (req: Request, res: Response) => {
   const branchId = Number(req.params.branchId);
-  const days = Number(req.query.days) || 14;
-  const tag = (req.query.tag as string) || 'РЕКЛАМА';
   if (![1, 2, 3, 4].includes(branchId)) {
     return res.status(400).json({ error: 'Invalid branchId' });
   }
   try {
-    const result = await KommoService.getLeadsByTagDaily(branchId, days, tag);
+    const tags = await KommoService.listTags(branchId);
+    return res.json(tags);
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/integrations/kommo/tag-map — выбранные теги всех городов
+router.get('/tag-map', requireAuth, async (_req: Request, res: Response) => {
+  try {
+    const map = await KommoService.getTagMap();
+    return res.json(map);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/integrations/kommo/tag-map/:branchId — сохранить выбранные теги
+router.post('/tag-map/:branchId', requireAuth, async (req: Request, res: Response) => {
+  const branchId = Number(req.params.branchId);
+  const { tagNames } = req.body;
+  if (![1, 2, 3, 4].includes(branchId)) {
+    return res.status(400).json({ error: 'Invalid branchId' });
+  }
+  if (!Array.isArray(tagNames)) {
+    return res.status(400).json({ error: 'tagNames должен быть массивом' });
+  }
+  try {
+    await KommoService.saveTags(branchId, tagNames);
+    return res.json({ ok: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/integrations/kommo/leads-daily/:branchId — лиды по тегу за N дней по дням
+router.get('/leads-daily/:branchId', requireAuth, async (req: Request, res: Response) => {
+  const branchId = Number(req.params.branchId);
+  const days = Number(req.query.days) || 14;
+  const tagParam = req.query.tag as string | undefined;
+  if (![1, 2, 3, 4].includes(branchId)) {
+    return res.status(400).json({ error: 'Invalid branchId' });
+  }
+  try {
+    // Если тег передан явно — используем его, иначе берём сохранённые теги города
+    const explicitTags = tagParam ? [tagParam] : undefined;
+    const result = await KommoService.getLeadsByTagsDaily(branchId, days, explicitTags);
     return res.json(result);
   } catch (err: any) {
     console.error('[KOMMO] leads-daily error:', err.message);

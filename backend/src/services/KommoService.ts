@@ -211,14 +211,16 @@ export const KommoService = {
     };
   },
 
-  // Возвращает количество лидов с заданным тегом за последние N дней,
+  // Возвращает количество лидов с заданным тегом(ами) за последние N дней,
   // сгруппированное по дням (от сегодня назад).
-  async getLeadsByTagDaily(branchId: number, days = 14, tagName = 'РЕКЛАМА') {
+  async getLeadsByTagDaily(branchId: number, days = 14, tagName: string | string[] = 'РЕКЛАМА') {
     const acc = await db('kommo_accounts').where({ branch_id: branchId }).first();
     if (!acc || !acc.access_token_enc) throw new Error('Аккаунт не подключён');
 
     const token = OAuthHelper.decrypt(acc.access_token_enc);
     const headers = { Authorization: `Bearer ${token}` };
+
+    const tagList = (Array.isArray(tagName) ? tagName : [tagName]).map((t) => t.toLowerCase());
 
     // Границы периода (по локальным дням)
     const now = new Date();
@@ -241,7 +243,6 @@ export const KommoService = {
       labels.push(key);
     }
 
-    const tagLower = tagName.toLowerCase();
     let page = 1;
     const maxPages = 40; // защита от бесконечного цикла
 
@@ -259,7 +260,7 @@ export const KommoService = {
 
       for (const lead of leads) {
         const tags: any[] = lead?._embedded?.tags || [];
-        const hasTag = tags.some((t) => String(t.name || '').toLowerCase() === tagLower);
+        const hasTag = tags.some((t) => tagList.includes(String(t.name || '').toLowerCase()));
         if (!hasTag) continue;
         const createdTs = Number(lead.created_at) * 1000;
         const key = new Date(createdTs).toISOString().slice(0, 10);
@@ -282,6 +283,78 @@ export const KommoService = {
       series, // количество лидов по дням
       total,
     };
+  },
+
+  // Список тегов лидов из Kommo для филиала
+  async listTags(branchId: number) {
+    const acc = await db('kommo_accounts').where({ branch_id: branchId }).first();
+    if (!acc || !acc.access_token_enc) throw new Error('Аккаунт не подключён');
+    const token = OAuthHelper.decrypt(acc.access_token_enc);
+
+    const tags: { id: number; name: string }[] = [];
+    let page = 1;
+    const maxPages = 20;
+    while (page <= maxPages) {
+      const resp = await fetch(`${acc.base_domain}/api/v4/leads/tags?limit=250&page=${page}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (resp.status === 204) break;
+      if (!resp.ok) throw new Error(`Kommo вернул ${resp.status} при запросе тегов`);
+      const data = (await resp.json()) as any;
+      const list: any[] = data?._embedded?.tags || [];
+      if (list.length === 0) break;
+      list.forEach((t) => tags.push({ id: t.id, name: t.name }));
+      if (!data?._links?.next) break;
+      page++;
+    }
+    return tags;
+  },
+
+  // Сохранить выбранные теги для филиала
+  async saveTags(branchId: number, tagNames: string[]): Promise<void> {
+    const names = tagNames.map((n) => n.trim()).filter(Boolean);
+    const existing = await db('kommo_tag_map').where({ branch_id: branchId }).first();
+    const data = { branch_id: branchId, tag_names: JSON.stringify(names), updated_at: db.fn.now() };
+    if (existing) {
+      await db('kommo_tag_map').where({ branch_id: branchId }).update(data);
+    } else {
+      await db('kommo_tag_map').insert({ ...data, created_at: db.fn.now() });
+    }
+  },
+
+  // Привязки тегов всех городов
+  async getTagMap() {
+    const branches = await db('branches').select('id', 'name').orderBy('id');
+    const maps = await db('kommo_tag_map').select('branch_id', 'tag_names');
+    const byBranch = new Map(maps.map((m) => [m.branch_id, m]));
+    return branches.map((b) => {
+      const m = byBranch.get(b.id);
+      let names: string[] = [];
+      try { names = m ? JSON.parse(m.tag_names) : []; } catch { names = []; }
+      return { branchId: b.id, branchName: b.name, tagNames: names };
+    });
+  },
+
+  // Лиды по выбранным тегам (из kommo_tag_map) за N дней по дням.
+  // Если переданы явные теги — используем их, иначе берём сохранённые.
+  async getLeadsByTagsDaily(branchId: number, days = 14, explicitTags?: string[]) {
+    let tags = explicitTags;
+    if (!tags || tags.length === 0) {
+      const map = await db('kommo_tag_map').where({ branch_id: branchId }).first();
+      try { tags = map ? JSON.parse(map.tag_names) : []; } catch { tags = []; }
+    }
+    if (!tags || tags.length === 0) {
+      // нет выбранных тегов — пустой результат с метками
+      const labels: string[] = [];
+      const now = new Date();
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        labels.push(d.toISOString().slice(0, 10));
+      }
+      return { tags: [], days, labels, series: labels.map(() => 0), total: 0, note: 'Теги не выбраны' };
+    }
+    return this.getLeadsByTagDaily(branchId, days, tags);
   },
 
   redirectUri(): string {

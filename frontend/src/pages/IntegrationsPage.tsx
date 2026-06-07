@@ -30,6 +30,56 @@ export default function IntegrationsPage() {
   const [forms, setForms] = useState<Record<number, { baseDomain: string; token: string; saving: boolean }>>({});
   const [testResult, setTestResult] = useState<Record<number, string>>({});
 
+  // Теги по городам
+  const [availableTags, setAvailableTags] = useState<Record<number, { id: number; name: string }[]>>({});
+  const [selectedTags, setSelectedTags] = useState<Record<number, Set<string>>>({});
+  const [tagsLoading, setTagsLoading] = useState<Record<number, boolean>>({});
+  const [tagsSaving, setTagsSaving] = useState<Record<number, boolean>>({});
+
+  const loadTagMap = async () => {
+    try {
+      const res = await api.get<{ branchId: number; tagNames: string[] }[]>('/integrations/kommo/tag-map');
+      const sel: Record<number, Set<string>> = {};
+      res.data.forEach((m) => { sel[m.branchId] = new Set(m.tagNames); });
+      setSelectedTags(sel);
+    } catch { /* пусто */ }
+  };
+
+  const loadTags = async (branchId: number) => {
+    setTagsLoading((p) => ({ ...p, [branchId]: true }));
+    try {
+      const res = await api.get<{ id: number; name: string }[]>(`/integrations/kommo/tags/${branchId}`);
+      setAvailableTags((p) => ({ ...p, [branchId]: res.data }));
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Не удалось загрузить теги');
+    } finally {
+      setTagsLoading((p) => ({ ...p, [branchId]: false }));
+    }
+  };
+
+  const toggleTag = (branchId: number, name: string) => {
+    setSelectedTags((prev) => {
+      const set = new Set(prev[branchId] || []);
+      if (set.has(name)) set.delete(name); else set.add(name);
+      return { ...prev, [branchId]: set };
+    });
+  };
+
+  const handleSaveTags = async (branchId: number) => {
+    setTagsSaving((p) => ({ ...p, [branchId]: true }));
+    setError(''); setNotice('');
+    try {
+      await api.post(`/integrations/kommo/tag-map/${branchId}`, {
+        tagNames: Array.from(selectedTags[branchId] || []),
+      });
+      setNotice('Теги сохранены');
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Не удалось сохранить теги');
+    } finally {
+      setTagsSaving((p) => ({ ...p, [branchId]: false }));
+    }
+  };
+
   const loadStatuses = async () => {
     try {
       const res = await api.get<{ statuses: BranchStatus[] }>('/integrations/kommo/status');
@@ -48,7 +98,18 @@ export default function IntegrationsPage() {
 
   useEffect(() => {
     loadStatuses();
+    loadTagMap();
   }, []);
+
+  // После загрузки статусов — подгружаем теги для подключённых городов
+  useEffect(() => {
+    statuses.forEach((s) => {
+      if (s.status === 'connected' && !availableTags[s.branchId]) {
+        loadTags(s.branchId);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statuses]);
 
   const updateForm = (branchId: number, field: 'baseDomain' | 'token', value: string) => {
     setForms((prev) => ({ ...prev, [branchId]: { ...prev[branchId], [field]: value } }));
@@ -155,6 +216,44 @@ export default function IntegrationsPage() {
               {testResult[b.branchId] && (
                 <div style={styles.testResult}>{testResult[b.branchId]}</div>
               )}
+
+              {b.status === 'connected' && (
+                <div style={styles.tagsBlock}>
+                  <div style={styles.tagsHeader}>
+                    <span style={styles.tagsTitle}>Теги для графика</span>
+                    <button
+                      style={styles.tagsReload}
+                      onClick={() => loadTags(b.branchId)}
+                      disabled={tagsLoading[b.branchId]}
+                    >
+                      {tagsLoading[b.branchId] ? '...' : '⟳'}
+                    </button>
+                  </div>
+
+                  <div style={styles.tagList}>
+                    {(availableTags[b.branchId] || []).map((t) => {
+                      const checked = selectedTags[b.branchId]?.has(t.name) || false;
+                      return (
+                        <label key={t.id} style={styles.tagRow}>
+                          <input type="checkbox" checked={checked} onChange={() => toggleTag(b.branchId, t.name)} />
+                          <span>{t.name}</span>
+                        </label>
+                      );
+                    })}
+                    {(availableTags[b.branchId] || []).length === 0 && !tagsLoading[b.branchId] && (
+                      <span style={styles.noTags}>Теги не найдены</span>
+                    )}
+                  </div>
+
+                  <button
+                    style={styles.tagsSave}
+                    disabled={tagsSaving[b.branchId]}
+                    onClick={() => handleSaveTags(b.branchId)}
+                  >
+                    {tagsSaving[b.branchId] ? 'Сохранение...' : 'Сохранить теги'}
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}
@@ -204,5 +303,22 @@ const styles: Record<string, React.CSSProperties> = {
   testResult: {
     marginTop: '8px', padding: '8px 10px', backgroundColor: '#f8fafc', borderRadius: '6px',
     fontSize: '12px', color: '#334155', lineHeight: 1.4,
+  },
+  tagsBlock: { marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #f1f5f9' },
+  tagsHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' },
+  tagsTitle: { fontSize: '13px', fontWeight: 600, color: '#1a1a2e' },
+  tagsReload: {
+    border: '1px solid #e2e8f0', borderRadius: '6px', background: '#fff', color: '#64748b',
+    cursor: 'pointer', fontSize: '14px', width: '28px', height: '28px',
+  },
+  tagList: {
+    display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '160px', overflow: 'auto',
+    border: '1px solid #f1f5f9', borderRadius: '8px', padding: '8px',
+  },
+  tagRow: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#334155', cursor: 'pointer' },
+  noTags: { fontSize: '12px', color: '#94a3b8' },
+  tagsSave: {
+    padding: '8px', border: 'none', borderRadius: '8px', backgroundColor: '#16a34a',
+    color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', marginTop: '8px',
   },
 };
