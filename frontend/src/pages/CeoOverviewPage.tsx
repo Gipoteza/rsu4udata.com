@@ -99,7 +99,6 @@ export default function CeoOverviewPage() {
       {/* Тулбар как в примере */}
       <div style={styles.toolbar}>
         <div style={styles.pill}>
-          <span style={styles.cityIcon}>📍</span>
           <span style={styles.cityName}>Одесса</span>
         </div>
 
@@ -174,7 +173,7 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: '0 1px 3px rgba(0,0,0,0.04)', overflow: 'hidden',
   },
   select: {
-    border: 'none', background: 'transparent', padding: '9px 14px', fontSize: '14px',
+    border: 'none', background: 'transparent', padding: '9px 32px 9px 14px', fontSize: '14px',
     color: '#1a1a2e', fontWeight: 500, outline: 'none', cursor: 'pointer',
   },
   refresh: {
