@@ -67,7 +67,7 @@ export default function CeoOverviewPage() {
 
   const series = [
     { name: 'Лиды', type: 'column', data: leads?.series || [] },
-    { name: 'Затраты Facebook, €', type: 'line', data: spend?.series || [] },
+    { name: 'Затраты Facebook, zł', type: 'line', data: spend?.series || [] },
   ];
 
   const options: ApexOptions = {
@@ -85,7 +85,7 @@ export default function CeoOverviewPage() {
     xaxis: { type: 'category' },
     yaxis: [
       { title: { text: 'Лиды' }, labels: { formatter: (v) => `${Math.round(v)}` } },
-      { opposite: true, title: { text: 'Затраты, €' }, labels: { formatter: (v) => `${Math.round(v)} €` } },
+      { opposite: true, title: { text: 'Затраты, zł' }, labels: { formatter: (v) => `${Math.round(v)} zł` } },
     ],
     tooltip: { shared: true, intersect: false },
     legend: { position: 'top' },
