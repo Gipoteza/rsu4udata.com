@@ -12,6 +12,37 @@ interface KommoTokenResponse {
 }
 
 export const KommoService = {
+  // Сохраняет long-lived токен напрямую (простой способ без OAuth).
+  // Проверяет токен запросом к Kommo API /api/v4/account.
+  async saveLongLivedToken(branchId: number, baseDomainRaw: string, token: string): Promise<void> {
+    let baseDomain = baseDomainRaw.trim().replace(/\/+$/, '');
+    if (!baseDomain.startsWith('http')) baseDomain = `https://${baseDomain}`;
+
+    // Проверяем токен
+    const resp = await fetch(`${baseDomain}/api/v4/account`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!resp.ok) {
+      throw new Error(`Kommo не принял токен (${resp.status}). Проверьте домен и Long-lived token.`);
+    }
+
+    const existing = await db('kommo_accounts').where({ branch_id: branchId }).first();
+    const data = {
+      branch_id: branchId,
+      base_domain: baseDomain,
+      access_token_enc: OAuthHelper.encrypt(token),
+      refresh_token_enc: OAuthHelper.encrypt(''), // long-lived не требует refresh
+      expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // ~1 год
+      status: 'connected',
+      updated_at: db.fn.now(),
+    };
+    if (existing) {
+      await db('kommo_accounts').where({ branch_id: branchId }).update(data);
+    } else {
+      await db('kommo_accounts').insert({ ...data, status: 'connected', created_at: db.fn.now() });
+    }
+  },
+
   // Сохраняет client_id и client_secret для филиала (вводятся в админке)
   async saveCredentials(branchId: number, clientId: string, clientSecret: string): Promise<void> {
     const existing = await db('kommo_accounts').where({ branch_id: branchId }).first();

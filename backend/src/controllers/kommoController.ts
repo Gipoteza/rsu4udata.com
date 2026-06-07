@@ -15,6 +15,25 @@ router.get('/status', requireAuth, async (_req: Request, res: Response) => {
   }
 });
 
+// POST /api/integrations/kommo/token/:branchId — сохранить long-lived токен (простой способ)
+router.post('/token/:branchId', requireAuth, async (req: Request, res: Response) => {
+  const branchId = Number(req.params.branchId);
+  const { baseDomain, token } = req.body;
+  if (![1, 2, 3, 4].includes(branchId)) {
+    return res.status(400).json({ error: 'Invalid branchId' });
+  }
+  if (!baseDomain || !token) {
+    return res.status(400).json({ error: 'Домен аккаунта и токен обязательны' });
+  }
+  try {
+    await KommoService.saveLongLivedToken(branchId, baseDomain, token);
+    return res.json({ ok: true });
+  } catch (err: any) {
+    console.error('[KOMMO] save token error:', err.message);
+    return res.status(400).json({ error: err.message });
+  }
+});
+
 // POST /api/integrations/kommo/credentials/:branchId — сохранить client_id/secret
 router.post('/credentials/:branchId', requireAuth, async (req: Request, res: Response) => {
   const branchId = Number(req.params.branchId);
