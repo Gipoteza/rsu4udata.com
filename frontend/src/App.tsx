@@ -15,12 +15,14 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {/* basename="/admin" — приложение живёт на rsu4udata.com/admin/ */}
-        <BrowserRouter basename="/admin">
+        {/* basename не нужен — nginx раздаёт всё с корня */}
+        <BrowserRouter>
           <Routes>
             {/* rsu4udata.com/admin/ — форма входа */}
             <Route path="/" element={<LoginPage />} />
-            {/* rsu4udata.com/admin/dashboard — защищённые страницы */}
+            <Route path="/admin" element={<LoginPage />} />
+            <Route path="/admin/" element={<LoginPage />} />
+            {/* Защищённые страницы */}
             <Route
               path="/dashboard/*"
               element={
@@ -31,7 +33,6 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            {/* Любой неизвестный путь → на форму входа */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
