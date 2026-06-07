@@ -28,6 +28,7 @@ export default function IntegrationsPage() {
   const [notice, setNotice] = useState('');
 
   const [forms, setForms] = useState<Record<number, { baseDomain: string; token: string; saving: boolean }>>({});
+  const [testResult, setTestResult] = useState<Record<number, string>>({});
 
   const loadStatuses = async () => {
     try {
@@ -73,6 +74,23 @@ export default function IntegrationsPage() {
       setError(e.response?.data?.error || 'Не удалось подключить');
     } finally {
       setForms((prev) => ({ ...prev, [branchId]: { ...prev[branchId], saving: false } }));
+    }
+  };
+
+  const handleTest = async (branchId: number) => {
+    setTestResult((prev) => ({ ...prev, [branchId]: 'Проверка...' }));
+    try {
+      const res = await api.get(`/integrations/kommo/test/${branchId}`);
+      const d = res.data;
+      const sample = d.leadsSample
+        ? ` Пример сделки: «${d.leadsSample.name || 'без названия'}» (id ${d.leadsSample.id})`
+        : '';
+      setTestResult((prev) => ({
+        ...prev,
+        [branchId]: `✓ ${d.accountName} (${d.subdomain}). Лиды доступны: ${d.leadsAvailable ? 'да' : 'нет'}.${sample}`,
+      }));
+    } catch (e: any) {
+      setTestResult((prev) => ({ ...prev, [branchId]: '✗ ' + (e.response?.data?.error || 'Ошибка проверки') }));
     }
   };
 
@@ -127,6 +145,16 @@ export default function IntegrationsPage() {
               >
                 {form.saving ? 'Проверка...' : b.status === 'connected' ? 'Обновить токен' : 'Подключить Kommo'}
               </button>
+
+              {b.status === 'connected' && (
+                <button style={styles.testButton} onClick={() => handleTest(b.branchId)}>
+                  Проверить данные
+                </button>
+              )}
+
+              {testResult[b.branchId] && (
+                <div style={styles.testResult}>{testResult[b.branchId]}</div>
+              )}
             </div>
           );
         })}
@@ -168,5 +196,13 @@ const styles: Record<string, React.CSSProperties> = {
   saveButton: {
     padding: '10px', border: 'none', borderRadius: '8px', backgroundColor: '#4f46e5',
     color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginTop: '12px',
+  },
+  testButton: {
+    padding: '9px', border: '1px solid #4f46e5', borderRadius: '8px', background: '#fff',
+    color: '#4f46e5', fontSize: '13px', fontWeight: 600, cursor: 'pointer', marginTop: '8px',
+  },
+  testResult: {
+    marginTop: '8px', padding: '8px 10px', backgroundColor: '#f8fafc', borderRadius: '6px',
+    fontSize: '12px', color: '#334155', lineHeight: 1.4,
   },
 };

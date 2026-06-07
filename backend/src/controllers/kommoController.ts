@@ -15,6 +15,20 @@ router.get('/status', requireAuth, async (_req: Request, res: Response) => {
   }
 });
 
+// GET /api/integrations/kommo/test/:branchId — проверка реальных данных
+router.get('/test/:branchId', requireAuth, async (req: Request, res: Response) => {
+  const branchId = Number(req.params.branchId);
+  if (![1, 2, 3, 4].includes(branchId)) {
+    return res.status(400).json({ error: 'Invalid branchId' });
+  }
+  try {
+    const result = await KommoService.testConnection(branchId);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
 // POST /api/integrations/kommo/token/:branchId — сохранить long-lived токен (простой способ)
 router.post('/token/:branchId', requireAuth, async (req: Request, res: Response) => {
   const branchId = Number(req.params.branchId);

@@ -173,6 +173,44 @@ export const KommoService = {
     });
   },
 
+  // Проверка подключения — тянет реальные данные из Kommo (название аккаунта + счётчики)
+  async testConnection(branchId: number) {
+    const acc = await db('kommo_accounts').where({ branch_id: branchId }).first();
+    if (!acc || !acc.access_token_enc) throw new Error('Аккаунт не подключён');
+
+    const token = OAuthHelper.decrypt(acc.access_token_enc);
+    const headers = { Authorization: `Bearer ${token}` };
+
+    // Информация об аккаунте
+    const accountResp = await fetch(`${acc.base_domain}/api/v4/account`, { headers });
+    if (!accountResp.ok) {
+      await db('kommo_accounts').where({ branch_id: branchId }).update({ status: 'requires_reconnect' });
+      throw new Error(`Kommo вернул ${accountResp.status}. Токен недействителен.`);
+    }
+    const account = (await accountResp.json()) as any;
+
+    // Лиды (первая страница) — чтобы показать что данные читаются
+    const leadsResp = await fetch(`${acc.base_domain}/api/v4/leads?limit=1`, { headers });
+    let leadsAvailable = false;
+    let leadsSample: any = null;
+    if (leadsResp.ok) {
+      leadsAvailable = true;
+      const leadsData = (await leadsResp.json()) as any;
+      const first = leadsData?._embedded?.leads?.[0];
+      if (first) {
+        leadsSample = { id: first.id, name: first.name, price: first.price, created_at: first.created_at };
+      }
+    }
+
+    return {
+      accountName: account.name,
+      subdomain: account.subdomain,
+      accountId: account.id,
+      leadsAvailable,
+      leadsSample,
+    };
+  },
+
   redirectUri(): string {
     return REDIRECT_URI;
   },
