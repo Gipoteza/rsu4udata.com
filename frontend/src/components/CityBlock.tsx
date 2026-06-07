@@ -79,6 +79,11 @@ export default function CityBlock({ branchId, cityName }: { branchId: number; ci
   const canNext = rangeIdx > 0;
   const maxSpend = Math.max(...adsets.map((a) => a.spend), 1);
 
+  // KPI
+  const totalLeads = leads?.total ?? 0;
+  const totalSpend = spend?.total ?? 0;
+  const costPerLead = totalLeads > 0 ? (totalSpend / totalLeads).toFixed(2) : '—';
+
   return (
     <div style={styles.block}>
       <div style={styles.toolbar}>
@@ -101,6 +106,24 @@ export default function CityBlock({ branchId, cityName }: { branchId: number; ci
 
       {error && <div style={styles.error}>{error}</div>}
       {spend?.note && <div style={styles.note}>Facebook: {spend.note}</div>}
+
+      {/* KPI карточки */}
+      <div style={styles.kpiRow}>
+        <div style={styles.kpiCard}>
+          <div style={styles.kpiLabel}>Лиды</div>
+          <div style={styles.kpiValue}>{totalLeads}</div>
+        </div>
+        <div style={styles.kpiDivider} />
+        <div style={styles.kpiCard}>
+          <div style={styles.kpiLabel}>Затраты</div>
+          <div style={styles.kpiValue}>{totalSpend} zł</div>
+        </div>
+        <div style={styles.kpiDivider} />
+        <div style={styles.kpiCard}>
+          <div style={styles.kpiLabel}>Цена лида</div>
+          <div style={styles.kpiValue}>{costPerLead === '—' ? '—' : `${costPerLead} zł`}</div>
+        </div>
+      </div>
 
       <div style={styles.chartBox}>
         {loading ? (
@@ -158,6 +181,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   refresh: { width: '40px', height: '40px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff', color: '#475569', cursor: 'pointer', fontSize: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
   chartBox: { background: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #e2e8f0', minHeight: '420px' },
+  kpiRow: {
+    display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0',
+    borderRadius: '12px', padding: '16px 24px', marginBottom: '16px', gap: '24px',
+  },
+  kpiCard: { display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '120px' },
+  kpiLabel: { fontSize: '13px', color: '#8892a4', fontWeight: 500 },
+  kpiValue: { fontSize: '26px', fontWeight: 700, color: '#1a1a2e', lineHeight: 1.1 },
+  kpiDivider: { width: '1px', alignSelf: 'stretch', background: '#f1f5f9' },
   loading: { padding: '160px 0', textAlign: 'center', color: '#8892a4' },
   error: { padding: '12px 16px', backgroundColor: '#fff5f5', border: '1px solid #fed7d7', borderRadius: '8px', color: '#e53e3e', fontSize: '14px', marginBottom: '16px' },
   note: { padding: '10px 14px', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', color: '#92400e', fontSize: '13px', marginBottom: '16px' },
