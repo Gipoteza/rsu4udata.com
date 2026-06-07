@@ -1,0 +1,16 @@
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = [
+  "npm install --workspace=shared --workspace=frontend"
+]
+
+[phases.build]
+cmds = [
+  "npm run build --workspace=shared",
+  "npm run build --workspace=frontend"
+]
+
+[staticAssets]
+outputDir = "frontend/dist"

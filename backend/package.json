@@ -13,8 +13,7 @@
     "migrate": "knex migrate:latest",
     "migrate:rollback": "knex migrate:rollback",
     "seed": "knex seed:run"
-  },
-  "dependencies": {
+  },  "dependencies": {
     "@rsu4u/shared": "*",
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.6",
