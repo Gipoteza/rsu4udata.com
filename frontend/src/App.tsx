@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './components/DashboardLayout';
 import LoginPage from './pages/LoginPage';
 import IntegrationsPage from './pages/IntegrationsPage';
+import FacebookPage from './pages/FacebookPage';
 import CeoOverviewPage from './pages/CeoOverviewPage';
 
 const queryClient = new QueryClient({
@@ -37,6 +38,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <DashboardLayout><IntegrationsPage /></DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/facebook"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout><FacebookPage /></DashboardLayout>
                 </ProtectedRoute>
               }
             />

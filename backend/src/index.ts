@@ -5,6 +5,7 @@ import cors from 'cors';
 import bcrypt from 'bcrypt';
 import authController from './controllers/authController';
 import kommoController from './controllers/kommoController';
+import facebookController from './controllers/facebookController';
 import db from './database/db';
 
 const app = express();
@@ -25,6 +26,7 @@ app.use((req, _res, next) => {
 
 app.use('/api/auth', authController);
 app.use('/api/integrations/kommo', kommoController);
+app.use('/api/integrations/facebook', facebookController);
 
 // Создаёт таблицы и admin пользователя
 app.get('/api/setup', async (_req, res) => {
@@ -103,6 +105,19 @@ app.get('/api/setup', async (_req, res) => {
           console.log(`[SETUP] added column ${col}`);
         }
       }
+    }
+
+    if (!await db.schema.hasTable('facebook_accounts')) {
+      await db.schema.createTable('facebook_accounts', (t) => {
+        t.integer('id').primary();
+        t.string('ad_account_id', 64).notNullable();
+        t.string('account_name', 255).nullable();
+        t.text('access_token_enc').notNullable();
+        t.string('status', 32).notNullable().defaultTo('not_connected');
+        t.timestamp('created_at').defaultTo(db.fn.now());
+        t.timestamp('updated_at').defaultTo(db.fn.now());
+      });
+      console.log('[SETUP] facebook_accounts table created');
     }
 
     const email = 'basegipoteza@gmail.com';

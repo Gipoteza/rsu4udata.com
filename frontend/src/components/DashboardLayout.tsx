@@ -38,7 +38,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div style={styles.menu}>
             <div style={styles.menuSection}>Интеграции</div>
             <button style={styles.menuItem} onClick={() => go('/dashboard/integrations')}>🔌 Kommo CRM</button>
-            <button style={{ ...styles.menuItem, opacity: 0.5 }} disabled>📘 Facebook Ads (скоро)</button>
+            <button style={styles.menuItem} onClick={() => go('/dashboard/facebook')}>📘 Facebook Ads</button>
 
             <div style={styles.divider} />
             <button style={{ ...styles.menuItem, color: '#e53e3e' }} onClick={() => logout()}>🚪 Выйти</button>
