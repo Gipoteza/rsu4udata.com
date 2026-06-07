@@ -15,21 +15,24 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        {/* basename="/admin" — приложение живёт на rsu4udata.com/admin/ */}
         <BrowserRouter basename="/admin">
           <Routes>
-            <Route path="/login" element={<LoginPage />} />
+            {/* rsu4udata.com/admin/ — форма входа */}
+            <Route path="/" element={<LoginPage />} />
+            {/* rsu4udata.com/admin/dashboard — защищённые страницы */}
             <Route
-              path="/*"
+              path="/dashboard/*"
               element={
                 <ProtectedRoute>
-                  {/* Dashboard pages will be added here */}
                   <div style={{ padding: '24px', fontFamily: 'sans-serif' }}>
                     <h1>Dashboard — coming soon</h1>
                   </div>
                 </ProtectedRoute>
               }
             />
-            <Route path="/" element={<Navigate to="/login" replace />} />
+            {/* Любой неизвестный путь → на форму входа */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
