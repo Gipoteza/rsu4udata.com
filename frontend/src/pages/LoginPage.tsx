@@ -17,8 +17,7 @@ export default function LoginPage() {
     try {
       await login(email, password);
       navigate('/dashboard');
-    } catch {
-      setError('Неверный email или пароль');
+    } catch {      setError('Неверный email или пароль');
     } finally {
       setLoading(false);
     }

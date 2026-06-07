@@ -15,9 +15,8 @@ api.interceptors.response.use(
   (res) => res,
   (error) => {
     if (error.response?.status === 401) {
-      // Не редиректим если уже на корне (форма входа)
-      if (window.location.pathname !== '/' && window.location.pathname !== '/admin/') {
-        window.location.href = '/admin/';
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
       }
     }
     return Promise.reject(error);
