@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://rsu4udatacombackend-production.up.railway.app';
+const API_URL = import.meta.env.VITE_API_URL || 'https://api.rsu4udata.com';
 const baseURL = `${API_URL}/api`;
 
 console.log('[API] baseURL:', baseURL);

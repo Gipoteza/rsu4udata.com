@@ -2,7 +2,7 @@ import db from '../database/db';
 import { OAuthHelper } from './OAuthHelper';
 
 const REDIRECT_URI = process.env.KOMMO_REDIRECT_URI
-  || 'https://rsu4udatacombackend-production.up.railway.app/api/integrations/kommo/callback';
+  || 'https://api.rsu4udata.com/api/integrations/kommo/callback';
 
 interface KommoTokenResponse {
   token_type: string;
