@@ -161,7 +161,7 @@ const styles: Record<string, React.CSSProperties> = {
   loading: { padding: '160px 0', textAlign: 'center', color: '#8892a4' },
   error: { padding: '12px 16px', backgroundColor: '#fff5f5', border: '1px solid #fed7d7', borderRadius: '8px', color: '#e53e3e', fontSize: '14px', marginBottom: '16px' },
   note: { padding: '10px 14px', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', color: '#92400e', fontSize: '13px', marginBottom: '16px' },
-  tableBox: { marginTop: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 20px' },
+  tableBox: { marginTop: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 20px', maxWidth: '620px' },
   tableTitle: { fontSize: '15px', fontWeight: 600, color: '#1a1a2e', marginBottom: '12px' },
   tableEmpty: { fontSize: '13px', color: '#94a3b8', padding: '8px 0' },
   tableHeaderRow: { display: 'grid', gridTemplateColumns: '1fr 70px 90px 100px', gap: '8px', padding: '0 0 8px 0', borderBottom: '1px solid #f1f5f9' },
