@@ -131,7 +131,9 @@ export const FacebookService = {
     if (!resp.ok) throw new Error(`Facebook вернул ${resp.status} при запросе кампаний`);
     const data = (await resp.json()) as any;
     const campaigns: any[] = data?.data || [];
-    return campaigns.map((c) => ({ id: c.id, name: c.name, status: c.status }));
+    return campaigns
+      .filter((c) => c.status === 'ACTIVE')
+      .map((c) => ({ id: c.id, name: c.name, status: c.status }));
   },
 
   // Сохранить привязку названий кампаний к городу
