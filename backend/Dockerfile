@@ -1,5 +1,6 @@
 FROM node:20-alpine AS builder
 
+# Cache bust: 2026-06-07-v2
 WORKDIR /app
 
 # Copy root package.json (workspaces)
