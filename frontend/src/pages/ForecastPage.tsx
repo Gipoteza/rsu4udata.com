@@ -34,10 +34,13 @@ export default function ForecastPage() {
 
   // Данные графиков
   const [building, setBuilding] = useState(false);
+  const [built, setBuilt] = useState(false);
   const [revByBranch, setRevByBranch] = useState<Record<number, RevenueDaily>>({});
 
-  const handleBuild = async () => {
-    if (!fromDate || !toDate) {
+  const handleBuild = async (fromArg?: string, toArg?: string) => {
+    const f = fromArg || fromDate;
+    const t = toArg || toDate;
+    if (!f || !t) {
       setError('Укажите период (от и до)');
       return;
     }
@@ -46,7 +49,7 @@ export default function ForecastPage() {
     try {
       const results = await Promise.allSettled(
         CITIES.map((c) =>
-          api.get<RevenueDaily>(`/integrations/kommo/forecast-revenue/${c.branchId}?from=${fromDate}&to=${toDate}`)
+          api.get<RevenueDaily>(`/integrations/kommo/forecast-revenue/${c.branchId}?from=${f}&to=${t}`)
         )
       );
       const map: Record<number, RevenueDaily> = {};
@@ -59,6 +62,7 @@ export default function ForecastPage() {
         }
       });
       setRevByBranch(map);
+      setBuilt(true);
       if (failed.length > 0) {
         setError(`Не удалось получить данные: ${failed.join(', ')}`);
       }
@@ -111,6 +115,17 @@ export default function ForecastPage() {
   useEffect(() => {
     CITIES.forEach((c) => { loadTags(c.branchId); loadStatuses(c.branchId); });
     loadSaved();
+    // Период по умолчанию — последние 30 дней
+    const today = new Date();
+    const past = new Date();
+    past.setDate(past.getDate() - 29);
+    const f = past.toISOString().slice(0, 10);
+    const t = today.toISOString().slice(0, 10);
+    setFromDate(f);
+    setToDate(t);
+    // Автопостроение графиков по сохранённым тегам/воронкам
+    handleBuild(f, t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSave = async () => {
@@ -203,13 +218,24 @@ export default function ForecastPage() {
         <button style={styles.saveBtn} onClick={handleSave} disabled={saving}>
           {saving ? 'Сохранение...' : 'Сохранить теги и воронки'}
         </button>
-        <button style={styles.buildBtn} onClick={handleBuild} disabled={building}>
+        <button style={styles.buildBtn} onClick={() => handleBuild()} disabled={building}>
           {building ? 'Строим...' : 'Построить графики'}
         </button>
       </div>
 
+      {/* Индикатор построения */}
+      {building && (
+        <div style={styles.chartBox}>
+          <div style={{ textAlign: 'center', padding: '60px 0', color: '#8892a4' }}>
+            Строим графики... (загрузка данных из Kommo может занять до минуты)
+          </div>
+        </div>
+      )}
+
       {/* Графики дохода */}
-      {Object.keys(revByBranch).length > 0 && (() => {
+      {building && <div style={styles.chartLoading}>Строим графики из Kommo, это может занять до минуты...</div>}
+
+      {!building && Object.keys(revByBranch).length > 0 && (() => {
         const fmt = (labels: string[]) => labels.map((d) => { const [, m, day] = d.split('-'); return `${day}.${m}`; });
         const kyiv = revByBranch[1];
         const odesa = revByBranch[2];
@@ -398,6 +424,10 @@ const styles: Record<string, React.CSSProperties> = {
   charts: { display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '28px' },
   chartBox: { background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' },
   chartTitle: { fontSize: '15px', fontWeight: 600, color: '#1a1a2e', marginBottom: '12px' },
+  chartLoading: {
+    background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px',
+    padding: '40px', textAlign: 'center', color: '#8892a4', fontSize: '14px', marginBottom: '20px',
+  },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' },
   card: {
     background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px',
