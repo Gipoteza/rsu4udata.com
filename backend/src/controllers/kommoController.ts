@@ -15,6 +15,48 @@ router.get('/status', requireAuth, async (_req: Request, res: Response) => {
   }
 });
 
+// GET /api/integrations/kommo/statuses/:branchId — список статусов воронок
+router.get('/statuses/:branchId', requireAuth, async (req: Request, res: Response) => {
+  const branchId = Number(req.params.branchId);
+  if (![1, 2, 3, 4].includes(branchId)) {
+    return res.status(400).json({ error: 'Invalid branchId' });
+  }
+  try {
+    const statuses = await KommoService.listStatuses(branchId);
+    return res.json(statuses);
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/integrations/kommo/forecast-status-map — статусы прогноза всех городов
+router.get('/forecast-status-map', requireAuth, async (_req: Request, res: Response) => {
+  try {
+    const map = await KommoService.getForecastStatusMap();
+    return res.json(map);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/integrations/kommo/forecast-status-map/:branchId
+router.post('/forecast-status-map/:branchId', requireAuth, async (req: Request, res: Response) => {
+  const branchId = Number(req.params.branchId);
+  const { statusNames } = req.body;
+  if (![1, 2, 3, 4].includes(branchId)) {
+    return res.status(400).json({ error: 'Invalid branchId' });
+  }
+  if (!Array.isArray(statusNames)) {
+    return res.status(400).json({ error: 'statusNames должен быть массивом' });
+  }
+  try {
+    await KommoService.saveForecastStatuses(branchId, statusNames);
+    return res.json({ ok: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/integrations/kommo/forecast-tag-map — теги прогноза всех городов
 router.get('/forecast-tag-map', requireAuth, async (_req: Request, res: Response) => {
   try {

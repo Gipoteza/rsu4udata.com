@@ -400,6 +400,52 @@ export const KommoService = {
     });
   },
 
+  // Список статусов (этапов воронок) из Kommo для филиала
+  async listStatuses(branchId: number) {
+    const acc = await db('kommo_accounts').where({ branch_id: branchId }).first();
+    if (!acc || !acc.access_token_enc) throw new Error('Аккаунт не подключён');
+    const token = OAuthHelper.decrypt(acc.access_token_enc);
+
+    const resp = await fetch(`${acc.base_domain}/api/v4/leads/pipelines`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!resp.ok) throw new Error(`Kommo вернул ${resp.status} при запросе воронок`);
+    const data = (await resp.json()) as any;
+    const pipelines: any[] = data?._embedded?.pipelines || [];
+
+    const statuses: { id: number; name: string; pipeline: string }[] = [];
+    pipelines.forEach((p) => {
+      const list: any[] = p?._embedded?.statuses || [];
+      list.forEach((s) => {
+        statuses.push({ id: s.id, name: s.name, pipeline: p.name });
+      });
+    });
+    return statuses;
+  },
+
+  async saveForecastStatuses(branchId: number, statusNames: string[]): Promise<void> {
+    const names = statusNames.map((n) => n.trim()).filter(Boolean);
+    const existing = await db('forecast_status_map').where({ branch_id: branchId }).first();
+    const data = { branch_id: branchId, status_names: JSON.stringify(names), updated_at: db.fn.now() };
+    if (existing) {
+      await db('forecast_status_map').where({ branch_id: branchId }).update(data);
+    } else {
+      await db('forecast_status_map').insert({ ...data, created_at: db.fn.now() });
+    }
+  },
+
+  async getForecastStatusMap() {
+    const branches = await db('branches').select('id', 'name').orderBy('id');
+    const maps = await db('forecast_status_map').select('branch_id', 'status_names');
+    const byBranch = new Map(maps.map((m) => [m.branch_id, m]));
+    return branches.map((b) => {
+      const m = byBranch.get(b.id);
+      let names: string[] = [];
+      try { names = m ? JSON.parse(m.status_names) : []; } catch { names = []; }
+      return { branchId: b.id, branchName: b.name, statusNames: names };
+    });
+  },
+
   redirectUri(): string {
     return REDIRECT_URI;
   },

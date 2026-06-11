@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../api/axios';
 
 interface Tag { id: number; name: string; }
+interface Status { id: number; name: string; pipeline: string; }
 
 const CITIES = [
   { branchId: 1, name: 'Киев' },
@@ -15,6 +16,13 @@ export default function ForecastPage() {
   const [selected, setSelected] = useState<Record<number, Set<string>>>({});
   const [search, setSearch] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState<Record<number, boolean>>({});
+
+  // Воронки (статусы)
+  const [statusesByBranch, setStatusesByBranch] = useState<Record<number, Status[]>>({});
+  const [selectedStatuses, setSelectedStatuses] = useState<Record<number, Set<string>>>({});
+  const [statusSearch, setStatusSearch] = useState<Record<number, string>>({});
+  const [statusLoading, setStatusLoading] = useState<Record<number, boolean>>({});
+
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
@@ -27,6 +35,12 @@ export default function ForecastPage() {
       const sel: Record<number, Set<string>> = {};
       res.data.forEach((m) => { sel[m.branchId] = new Set(m.tagNames); });
       setSelected(sel);
+    } catch { /* пусто */ }
+    try {
+      const res = await api.get<{ branchId: number; statusNames: string[] }[]>('/integrations/kommo/forecast-status-map');
+      const sel: Record<number, Set<string>> = {};
+      res.data.forEach((m) => { sel[m.branchId] = new Set(m.statusNames); });
+      setSelectedStatuses(sel);
     } catch { /* пусто */ }
   };
 
@@ -42,8 +56,20 @@ export default function ForecastPage() {
     }
   };
 
+  const loadStatuses = async (branchId: number) => {
+    setStatusLoading((p) => ({ ...p, [branchId]: true }));
+    try {
+      const res = await api.get<Status[]>(`/integrations/kommo/statuses/${branchId}`);
+      setStatusesByBranch((p) => ({ ...p, [branchId]: res.data }));
+    } catch (e: any) {
+      setError(`${CITIES.find((c) => c.branchId === branchId)?.name}: не удалось загрузить воронки`);
+    } finally {
+      setStatusLoading((p) => ({ ...p, [branchId]: false }));
+    }
+  };
+
   useEffect(() => {
-    CITIES.forEach((c) => loadTags(c.branchId));
+    CITIES.forEach((c) => { loadTags(c.branchId); loadStatuses(c.branchId); });
     loadSaved();
   }, []);
 
@@ -51,16 +77,21 @@ export default function ForecastPage() {
     setSaving(true);
     setError(''); setNotice('');
     try {
-      await Promise.all(
-        CITIES.map((c) =>
+      await Promise.all([
+        ...CITIES.map((c) =>
           api.post(`/integrations/kommo/forecast-tag-map/${c.branchId}`, {
             tagNames: Array.from(selected[c.branchId] || []),
           })
-        )
-      );
-      setNotice('Выбранные теги сохранены');
+        ),
+        ...CITIES.map((c) =>
+          api.post(`/integrations/kommo/forecast-status-map/${c.branchId}`, {
+            statusNames: Array.from(selectedStatuses[c.branchId] || []),
+          })
+        ),
+      ]);
+      setNotice('Выбранные теги и воронки сохранены');
     } catch (e: any) {
-      setError('Не удалось сохранить теги');
+      setError('Не удалось сохранить');
     } finally {
       setSaving(false);
     }
@@ -68,6 +99,14 @@ export default function ForecastPage() {
 
   const toggle = (branchId: number, name: string) => {
     setSelected((prev) => {
+      const set = new Set(prev[branchId] || []);
+      if (set.has(name)) set.delete(name); else set.add(name);
+      return { ...prev, [branchId]: set };
+    });
+  };
+
+  const toggleStatus = (branchId: number, name: string) => {
+    setSelectedStatuses((prev) => {
       const set = new Set(prev[branchId] || []);
       if (set.has(name)) set.delete(name); else set.add(name);
       return { ...prev, [branchId]: set };
@@ -87,14 +126,27 @@ export default function ForecastPage() {
     });
   };
 
+  const getVisibleStatuses = (branchId: number) => {
+    const all = statusesByBranch[branchId] || [];
+    const sel = selectedStatuses[branchId] || new Set<string>();
+    const q = (statusSearch[branchId] || '').toLowerCase().trim();
+    const filtered = q ? all.filter((s) => s.name.toLowerCase().includes(q)) : all;
+    return [...filtered].sort((a, b) => {
+      const aSel = sel.has(a.name) ? 0 : 1;
+      const bSel = sel.has(b.name) ? 0 : 1;
+      if (aSel !== bSel) return aSel - bSel;
+      return a.name.localeCompare(b.name, 'ru');
+    });
+  };
+
   const totalSelected = Object.values(selected).reduce((sum, s) => sum + s.size, 0);
+  const totalStatuses = Object.values(selectedStatuses).reduce((sum, s) => sum + s.size, 0);
 
   return (
     <div style={styles.page}>
       <h1 style={styles.title}>Прогнозирование</h1>
       <p style={styles.subtitle}>
-        Выберите теги Kommo по каждому городу — далее построим графики по выбранным тегам.
-        {totalSelected > 0 ? ` Выбрано тегов: ${totalSelected}` : ''}
+        Выберите теги и воронки Kommo по каждому городу — далее построим графики.
       </p>
 
       {error && <div style={styles.error}>{error}</div>}
@@ -109,10 +161,11 @@ export default function ForecastPage() {
           <input type="date" style={styles.dateInput} value={toDate} onChange={(e) => setToDate(e.target.value)} />
         </div>
         <button style={styles.saveBtn} onClick={handleSave} disabled={saving}>
-          {saving ? 'Сохранение...' : 'Сохранить выбранные теги'}
+          {saving ? 'Сохранение...' : 'Сохранить теги и воронки'}
         </button>
       </div>
 
+      <h2 style={styles.sectionTitle}>Теги{totalSelected > 0 ? ` · выбрано ${totalSelected}` : ''}</h2>
       <div style={styles.grid}>
         {CITIES.map((c) => (
           <div key={c.branchId} style={styles.card}>
@@ -151,6 +204,50 @@ export default function ForecastPage() {
 
             <div style={styles.selCount}>
               Выбрано: {selected[c.branchId]?.size || 0}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <h2 style={styles.sectionTitle}>Воронки{totalStatuses > 0 ? ` · выбрано ${totalStatuses}` : ''}</h2>
+      <div style={styles.grid}>
+        {CITIES.map((c) => (
+          <div key={c.branchId} style={styles.card}>
+            <div style={styles.cardHeader}>
+              <span style={styles.cityName}>{c.name}</span>
+              <button
+                style={styles.reload}
+                onClick={() => loadStatuses(c.branchId)}
+                disabled={statusLoading[c.branchId]}
+              >
+                {statusLoading[c.branchId] ? '...' : '⟳'}
+              </button>
+            </div>
+
+            <input
+              style={styles.searchInput}
+              value={statusSearch[c.branchId] || ''}
+              onChange={(e) => setStatusSearch((p) => ({ ...p, [c.branchId]: e.target.value }))}
+              placeholder="Поиск по воронкам..."
+            />
+
+            <div style={styles.tagList}>
+              {getVisibleStatuses(c.branchId).map((s) => {
+                const checked = selectedStatuses[c.branchId]?.has(s.name) || false;
+                return (
+                  <label key={s.id} style={styles.tagRow}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleStatus(c.branchId, s.name)} />
+                    <span>{s.name}<span style={styles.pipeline}>{s.pipeline}</span></span>
+                  </label>
+                );
+              })}
+              {(statusesByBranch[c.branchId] || []).length === 0 && !statusLoading[c.branchId] && (
+                <span style={styles.empty}>Воронки не найдены</span>
+              )}
+            </div>
+
+            <div style={styles.selCount}>
+              Выбрано: {selectedStatuses[c.branchId]?.size || 0}
             </div>
           </div>
         ))}
@@ -209,4 +306,6 @@ const styles: Record<string, React.CSSProperties> = {
   tagRow: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#334155', cursor: 'pointer' },
   empty: { fontSize: '12px', color: '#94a3b8' },
   selCount: { fontSize: '12px', color: '#4f46e5', fontWeight: 600 },
+  sectionTitle: { fontSize: '18px', fontWeight: 700, color: '#1a1a2e', margin: '8px 0 14px 0' },
+  pipeline: { display: 'block', fontSize: '11px', color: '#94a3b8' },
 };

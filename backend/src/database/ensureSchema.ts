@@ -101,6 +101,16 @@ export async function ensureSchema(): Promise<void> {
     console.log('[SCHEMA] forecast_tag_map created');
   }
 
+  if (!await db.schema.hasTable('forecast_status_map')) {
+    await db.schema.createTable('forecast_status_map', (t) => {
+      t.integer('branch_id').primary().references('id').inTable('branches').onDelete('CASCADE');
+      t.text('status_names').notNullable().defaultTo('[]');
+      t.timestamp('created_at').defaultTo(db.fn.now());
+      t.timestamp('updated_at').defaultTo(db.fn.now());
+    });
+    console.log('[SCHEMA] forecast_status_map created');
+  }
+
   // Создаём admin если его ещё нет
   const email = process.env.ADMIN_EMAIL || 'basegipoteza@gmail.com';
   const existing = await db('users').where({ email }).first();
