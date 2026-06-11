@@ -16,6 +16,19 @@ export default function ForecastPage() {
   const [search, setSearch] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState<Record<number, boolean>>({});
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
+  const loadSaved = async () => {
+    try {
+      const res = await api.get<{ branchId: number; tagNames: string[] }[]>('/integrations/kommo/forecast-tag-map');
+      const sel: Record<number, Set<string>> = {};
+      res.data.forEach((m) => { sel[m.branchId] = new Set(m.tagNames); });
+      setSelected(sel);
+    } catch { /* пусто */ }
+  };
 
   const loadTags = async (branchId: number) => {
     setLoading((p) => ({ ...p, [branchId]: true }));
@@ -31,7 +44,27 @@ export default function ForecastPage() {
 
   useEffect(() => {
     CITIES.forEach((c) => loadTags(c.branchId));
+    loadSaved();
   }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(''); setNotice('');
+    try {
+      await Promise.all(
+        CITIES.map((c) =>
+          api.post(`/integrations/kommo/forecast-tag-map/${c.branchId}`, {
+            tagNames: Array.from(selected[c.branchId] || []),
+          })
+        )
+      );
+      setNotice('Выбранные теги сохранены');
+    } catch (e: any) {
+      setError('Не удалось сохранить теги');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const toggle = (branchId: number, name: string) => {
     setSelected((prev) => {
@@ -65,6 +98,20 @@ export default function ForecastPage() {
       </p>
 
       {error && <div style={styles.error}>{error}</div>}
+      {notice && <div style={styles.notice}>{notice}</div>}
+
+      {/* Период и сохранение */}
+      <div style={styles.controlBar}>
+        <div style={styles.periodGroup}>
+          <span style={styles.periodLabel}>Период:</span>
+          <input type="date" style={styles.dateInput} value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          <span style={styles.dash}>—</span>
+          <input type="date" style={styles.dateInput} value={toDate} onChange={(e) => setToDate(e.target.value)} />
+        </div>
+        <button style={styles.saveBtn} onClick={handleSave} disabled={saving}>
+          {saving ? 'Сохранение...' : 'Сохранить выбранные теги'}
+        </button>
+      </div>
 
       <div style={styles.grid}>
         {CITIES.map((c) => (
@@ -119,6 +166,26 @@ const styles: Record<string, React.CSSProperties> = {
   error: {
     padding: '12px 16px', backgroundColor: '#fff5f5', border: '1px solid #fed7d7',
     borderRadius: '8px', color: '#e53e3e', fontSize: '14px', marginBottom: '16px',
+  },
+  notice: {
+    padding: '12px 16px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0',
+    borderRadius: '8px', color: '#15803d', fontSize: '14px', marginBottom: '16px',
+  },
+  controlBar: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px',
+    background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px',
+    padding: '14px 20px', marginBottom: '20px', flexWrap: 'wrap',
+  },
+  periodGroup: { display: 'flex', alignItems: 'center', gap: '8px' },
+  periodLabel: { fontSize: '14px', color: '#64748b', fontWeight: 500 },
+  dateInput: {
+    border: '1px solid #e2e8f0', borderRadius: '8px', padding: '7px 10px', fontSize: '13px',
+    color: '#1a1a2e', outline: 'none', background: '#fafafa',
+  },
+  dash: { color: '#94a3b8' },
+  saveBtn: {
+    border: 'none', borderRadius: '8px', padding: '10px 18px', background: '#4f46e5', color: '#fff',
+    fontSize: '14px', fontWeight: 600, cursor: 'pointer',
   },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' },
   card: {

@@ -15,6 +15,34 @@ router.get('/status', requireAuth, async (_req: Request, res: Response) => {
   }
 });
 
+// GET /api/integrations/kommo/forecast-tag-map — теги прогноза всех городов
+router.get('/forecast-tag-map', requireAuth, async (_req: Request, res: Response) => {
+  try {
+    const map = await KommoService.getForecastTagMap();
+    return res.json(map);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/integrations/kommo/forecast-tag-map/:branchId — сохранить теги прогноза
+router.post('/forecast-tag-map/:branchId', requireAuth, async (req: Request, res: Response) => {
+  const branchId = Number(req.params.branchId);
+  const { tagNames } = req.body;
+  if (![1, 2, 3, 4].includes(branchId)) {
+    return res.status(400).json({ error: 'Invalid branchId' });
+  }
+  if (!Array.isArray(tagNames)) {
+    return res.status(400).json({ error: 'tagNames должен быть массивом' });
+  }
+  try {
+    await KommoService.saveForecastTags(branchId, tagNames);
+    return res.json({ ok: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/integrations/kommo/tags/:branchId — список тегов из Kommo
 router.get('/tags/:branchId', requireAuth, async (req: Request, res: Response) => {
   const branchId = Number(req.params.branchId);

@@ -375,6 +375,31 @@ export const KommoService = {
     return this.getLeadsByTagDaily(branchId, days, tags, from, to);
   },
 
+  // Сохранить теги прогноза для филиала
+  async saveForecastTags(branchId: number, tagNames: string[]): Promise<void> {
+    const names = tagNames.map((n) => n.trim()).filter(Boolean);
+    const existing = await db('forecast_tag_map').where({ branch_id: branchId }).first();
+    const data = { branch_id: branchId, tag_names: JSON.stringify(names), updated_at: db.fn.now() };
+    if (existing) {
+      await db('forecast_tag_map').where({ branch_id: branchId }).update(data);
+    } else {
+      await db('forecast_tag_map').insert({ ...data, created_at: db.fn.now() });
+    }
+  },
+
+  // Привязки тегов прогноза всех городов
+  async getForecastTagMap() {
+    const branches = await db('branches').select('id', 'name').orderBy('id');
+    const maps = await db('forecast_tag_map').select('branch_id', 'tag_names');
+    const byBranch = new Map(maps.map((m) => [m.branch_id, m]));
+    return branches.map((b) => {
+      const m = byBranch.get(b.id);
+      let names: string[] = [];
+      try { names = m ? JSON.parse(m.tag_names) : []; } catch { names = []; }
+      return { branchId: b.id, branchName: b.name, tagNames: names };
+    });
+  },
+
   redirectUri(): string {
     return REDIRECT_URI;
   },
