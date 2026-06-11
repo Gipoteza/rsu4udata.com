@@ -468,6 +468,10 @@ export const KommoService = {
     const tagSet = new Set(tagNames.map((t) => t.toLowerCase()));
     const statusSet = new Set(statusNames.map((s) => s.toLowerCase()));
 
+    console.log(`[FORECAST] branch=${branchId} from=${from} to=${to}`);
+    console.log(`[FORECAST] statuses(${statusSet.size}):`, [...statusSet]);
+    console.log(`[FORECAST] tags(${tagSet.size}):`, [...tagSet]);
+
     // Карта status_id -> name
     const pipesResp = await fetch(`${acc.base_domain}/api/v4/leads/pipelines`, { headers });
     const statusIdToName = new Map<number, string>();
@@ -476,6 +480,9 @@ export const KommoService = {
       (pdata?._embedded?.pipelines || []).forEach((p: any) => {
         (p?._embedded?.statuses || []).forEach((s: any) => statusIdToName.set(s.id, s.name));
       });
+      console.log(`[FORECAST] branch=${branchId} pipeline statuses loaded:`, [...statusIdToName.entries()].map(([id, n]) => `${id}=${n}`).join(', '));
+    } else {
+      console.log(`[FORECAST] branch=${branchId} failed to load pipelines: ${pipesResp.status}`);
     }
 
     // Границы периода
@@ -506,6 +513,9 @@ export const KommoService = {
       const leads: any[] = data?._embedded?.leads || [];
       if (leads.length === 0) break;
 
+      console.log(`[FORECAST] branch=${branchId} page=${page} leads=${leads.length}`);
+      let matched = 0;
+
       for (const lead of leads) {
         // Фильтр по статусу (воронке)
         if (statusSet.size > 0) {
@@ -521,15 +531,21 @@ export const KommoService = {
         // Группируем по дате изменения (в пределах периода)
         const ts = Number(lead.updated_at) * 1000;
         const key = new Date(ts).toISOString().slice(0, 10);
-        if (byDay.has(key)) byDay.set(key, byDay.get(key)! + (Number(lead.price) || 0));
+        if (byDay.has(key)) {
+          byDay.set(key, byDay.get(key)! + (Number(lead.price) || 0));
+          matched++;
+        }
       }
+      console.log(`[FORECAST] branch=${branchId} page=${page} matched=${matched}`);
 
       if (!data?._links?.next) break;
       page++;
     }
 
     const series = labels.map((k) => Number((byDay.get(k) || 0).toFixed(2)));
-    return { branchId, labels, series, total: Number(series.reduce((a, b) => a + b, 0).toFixed(2)) };
+    const total = Number(series.reduce((a, b) => a + b, 0).toFixed(2));
+    console.log(`[FORECAST] branch=${branchId} TOTAL=${total}`);
+    return { branchId, labels, series, total };
   },
 
   redirectUri(): string {
