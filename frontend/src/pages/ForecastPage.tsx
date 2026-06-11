@@ -44,14 +44,24 @@ export default function ForecastPage() {
     setBuilding(true);
     setError(''); setNotice('');
     try {
-      const results = await Promise.all(
+      const results = await Promise.allSettled(
         CITIES.map((c) =>
           api.get<RevenueDaily>(`/integrations/kommo/forecast-revenue/${c.branchId}?from=${fromDate}&to=${toDate}`)
         )
       );
       const map: Record<number, RevenueDaily> = {};
-      results.forEach((r) => { map[r.data.branchId] = r.data; });
+      const failed: string[] = [];
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled') {
+          map[r.value.data.branchId] = r.value.data;
+        } else {
+          failed.push(CITIES[idx].name);
+        }
+      });
       setRevByBranch(map);
+      if (failed.length > 0) {
+        setError(`Не удалось получить данные: ${failed.join(', ')}`);
+      }
     } catch (e: any) {
       setError('Не удалось построить графики');
     } finally {
