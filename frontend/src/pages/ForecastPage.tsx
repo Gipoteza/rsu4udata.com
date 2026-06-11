@@ -48,9 +48,14 @@ export default function ForecastPage() {
     setError(''); setNotice('');
     try {
       const results = await Promise.allSettled(
-        CITIES.map((c) =>
-          api.get<RevenueDaily>(`/integrations/kommo/forecast-revenue/${c.branchId}?from=${f}&to=${t}`)
-        )
+        CITIES.map((c) => {
+          const statuses = Array.from(selectedStatuses[c.branchId] || []);
+          const tags = Array.from(selected[c.branchId] || []);
+          const params = new URLSearchParams({ from: f, to: t });
+          if (statuses.length) params.set('statuses', statuses.join('|'));
+          if (tags.length) params.set('tags', tags.join('|'));
+          return api.get<RevenueDaily>(`/integrations/kommo/forecast-revenue/${c.branchId}?${params.toString()}`);
+        })
       );
       const map: Record<number, RevenueDaily> = {};
       const failed: string[] = [];

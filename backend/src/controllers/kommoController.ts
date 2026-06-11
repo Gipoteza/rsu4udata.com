@@ -20,6 +20,8 @@ router.get('/forecast-revenue/:branchId', requireAuth, async (req: Request, res:
   const branchId = Number(req.params.branchId);
   const from = req.query.from as string;
   const to = req.query.to as string;
+  const statusesParam = req.query.statuses as string | undefined;
+  const tagsParam = req.query.tags as string | undefined;
   if (![1, 2, 3, 4].includes(branchId)) {
     return res.status(400).json({ error: 'Invalid branchId' });
   }
@@ -27,7 +29,9 @@ router.get('/forecast-revenue/:branchId', requireAuth, async (req: Request, res:
     return res.status(400).json({ error: 'from и to обязательны' });
   }
   try {
-    const result = await KommoService.getForecastRevenueDaily(branchId, from, to);
+    const statuses = statusesParam ? statusesParam.split('|').filter(Boolean) : undefined;
+    const tags = tagsParam ? tagsParam.split('|').filter(Boolean) : undefined;
+    const result = await KommoService.getForecastRevenueDaily(branchId, from, to, statuses, tags);
     return res.json(result);
   } catch (err: any) {
     return res.status(400).json({ error: err.message });

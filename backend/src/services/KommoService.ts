@@ -448,19 +448,23 @@ export const KommoService = {
 
   // Доход по дням: сумма price лидов, которые в выбранных статусах (воронках)
   // и с выбранными тегами (forecast_tag_map / forecast_status_map), за период.
-  async getForecastRevenueDaily(branchId: number, from: string, to: string) {
+  async getForecastRevenueDaily(branchId: number, from: string, to: string, explicitStatuses?: string[], explicitTags?: string[]) {
     const acc = await db('kommo_accounts').where({ branch_id: branchId }).first();
     if (!acc || !acc.access_token_enc) throw new Error('Аккаунт не подключён');
     const token = OAuthHelper.decrypt(acc.access_token_enc);
     const headers = { Authorization: `Bearer ${token}` };
 
-    // Выбранные теги и статусы
-    const tagMap = await db('forecast_tag_map').where({ branch_id: branchId }).first();
-    const statusMap = await db('forecast_status_map').where({ branch_id: branchId }).first();
-    let tagNames: string[] = [];
-    let statusNames: string[] = [];
-    try { tagNames = tagMap ? JSON.parse(tagMap.tag_names) : []; } catch { tagNames = []; }
-    try { statusNames = statusMap ? JSON.parse(statusMap.status_names) : []; } catch { statusNames = []; }
+    // Выбранные теги и статусы: либо явные (из запроса), либо сохранённые в БД
+    let tagNames: string[] = explicitTags || [];
+    let statusNames: string[] = explicitStatuses || [];
+    if (!explicitTags) {
+      const tagMap = await db('forecast_tag_map').where({ branch_id: branchId }).first();
+      try { tagNames = tagMap ? JSON.parse(tagMap.tag_names) : []; } catch { tagNames = []; }
+    }
+    if (!explicitStatuses) {
+      const statusMap = await db('forecast_status_map').where({ branch_id: branchId }).first();
+      try { statusNames = statusMap ? JSON.parse(statusMap.status_names) : []; } catch { statusNames = []; }
+    }
     const tagSet = new Set(tagNames.map((t) => t.toLowerCase()));
     const statusSet = new Set(statusNames.map((s) => s.toLowerCase()));
 
