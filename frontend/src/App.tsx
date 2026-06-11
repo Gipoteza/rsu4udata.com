@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage';
 import IntegrationsPage from './pages/IntegrationsPage';
 import FacebookPage from './pages/FacebookPage';
 import CeoOverviewPage from './pages/CeoOverviewPage';
+import ForecastPage from './pages/ForecastPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,6 +47,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <DashboardLayout><FacebookPage /></DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/forecast"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout><ForecastPage /></DashboardLayout>
                 </ProtectedRoute>
               }
             />
