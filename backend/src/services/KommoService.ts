@@ -496,8 +496,9 @@ export const KommoService = {
     let page = 1;
     const maxPages = 60;
     while (page <= maxPages) {
+      // Фильтруем по дате изменения (когда лид попал в статус), а не создания
       const url = `${acc.base_domain}/api/v4/leads?with=tags&limit=250&page=${page}`
-        + `&filter[created_at][from]=${fromTs}&filter[created_at][to]=${toTs}`;
+        + `&filter[updated_at][from]=${fromTs}&filter[updated_at][to]=${toTs}`;
       const resp = await fetch(url, { headers });
       if (resp.status === 204) break;
       if (!resp.ok) throw new Error(`Kommo вернул ${resp.status} при запросе лидов`);
@@ -517,8 +518,9 @@ export const KommoService = {
           const hasTag = tags.some((t) => tagSet.has(String(t.name || '').toLowerCase()));
           if (!hasTag) continue;
         }
-        const createdTs = Number(lead.created_at) * 1000;
-        const key = new Date(createdTs).toISOString().slice(0, 10);
+        // Группируем по дате изменения (в пределах периода)
+        const ts = Number(lead.updated_at) * 1000;
+        const key = new Date(ts).toISOString().slice(0, 10);
         if (byDay.has(key)) byDay.set(key, byDay.get(key)! + (Number(lead.price) || 0));
       }
 
