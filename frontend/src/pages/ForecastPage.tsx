@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import ReactApexChart from 'react-apexcharts';
+import type { ApexOptions } from 'apexcharts';
 import api from '../api/axios';
 
 interface Tag { id: number; name: string; }
 interface Status { id: number; name: string; pipeline: string; }
+interface RevenueDaily { branchId: number; labels: string[]; series: number[]; total: number; }
 
 const CITIES = [
   { branchId: 1, name: 'Киев' },
@@ -28,6 +31,33 @@ export default function ForecastPage() {
   const [saving, setSaving] = useState(false);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+
+  // Данные графиков
+  const [building, setBuilding] = useState(false);
+  const [revByBranch, setRevByBranch] = useState<Record<number, RevenueDaily>>({});
+
+  const handleBuild = async () => {
+    if (!fromDate || !toDate) {
+      setError('Укажите период (от и до)');
+      return;
+    }
+    setBuilding(true);
+    setError(''); setNotice('');
+    try {
+      const results = await Promise.all(
+        CITIES.map((c) =>
+          api.get<RevenueDaily>(`/integrations/kommo/forecast-revenue/${c.branchId}?from=${fromDate}&to=${toDate}`)
+        )
+      );
+      const map: Record<number, RevenueDaily> = {};
+      results.forEach((r) => { map[r.data.branchId] = r.data; });
+      setRevByBranch(map);
+    } catch (e: any) {
+      setError('Не удалось построить графики');
+    } finally {
+      setBuilding(false);
+    }
+  };
 
   const loadSaved = async () => {
     try {
@@ -163,7 +193,74 @@ export default function ForecastPage() {
         <button style={styles.saveBtn} onClick={handleSave} disabled={saving}>
           {saving ? 'Сохранение...' : 'Сохранить теги и воронки'}
         </button>
+        <button style={styles.buildBtn} onClick={handleBuild} disabled={building}>
+          {building ? 'Строим...' : 'Построить графики'}
+        </button>
       </div>
+
+      {/* Графики дохода */}
+      {Object.keys(revByBranch).length > 0 && (() => {
+        const fmt = (labels: string[]) => labels.map((d) => { const [, m, day] = d.split('-'); return `${day}.${m}`; });
+        const kyiv = revByBranch[1];
+        const odesa = revByBranch[2];
+        const lviv = revByBranch[3];
+        const warsaw = revByBranch[4];
+        const labels1 = fmt((kyiv || odesa || lviv)?.labels || []);
+        const totalSeries = (kyiv?.labels || []).map((_, i) =>
+          Number(((kyiv?.series[i] || 0) + (odesa?.series[i] || 0) + (lviv?.series[i] || 0)).toFixed(2))
+        );
+        const grand = (kyiv?.total || 0) + (odesa?.total || 0) + (lviv?.total || 0);
+
+        const chart1Series = [
+          { name: 'Киев', type: 'column', data: kyiv?.series || [] },
+          { name: 'Одесса', type: 'column', data: odesa?.series || [] },
+          { name: 'Львов', type: 'column', data: lviv?.series || [] },
+          { name: 'Всего', type: 'line', data: totalSeries },
+        ];
+        const chart1Options: ApexOptions = {
+          chart: { type: 'line', toolbar: { show: false }, fontFamily: 'inherit' },
+          stroke: { width: [0, 0, 0, 3], curve: 'smooth' },
+          plotOptions: { bar: { columnWidth: '60%', borderRadius: 3 } },
+          colors: ['#4f46e5', '#16a34a', '#ea580c', '#1a1a2e'],
+          dataLabels: { enabled: false },
+          labels: labels1,
+          xaxis: { type: 'category' },
+          yaxis: { title: { text: 'Доход, €' }, labels: { formatter: (v) => `${Math.round(v)} €` } },
+          tooltip: { shared: true, intersect: false, y: { formatter: (v) => `${v} €` } },
+          legend: { position: 'top' },
+        };
+
+        const labels2 = fmt(warsaw?.labels || []);
+        const chart2Series = [{ name: 'Варшава', type: 'column', data: warsaw?.series || [] }];
+        const chart2Options: ApexOptions = {
+          chart: { type: 'bar', toolbar: { show: false }, fontFamily: 'inherit' },
+          plotOptions: { bar: { columnWidth: '55%', borderRadius: 4 } },
+          colors: ['#1877f2'],
+          dataLabels: { enabled: false },
+          labels: labels2,
+          xaxis: { type: 'category' },
+          yaxis: { title: { text: 'Доход, zł' }, labels: { formatter: (v) => `${Math.round(v)} zł` } },
+          tooltip: { y: { formatter: (v) => `${v} zł` } },
+          legend: { position: 'top' },
+        };
+
+        return (
+          <div style={styles.charts}>
+            <div style={styles.chartBox}>
+              <div style={styles.chartTitle}>
+                Доход: Киев + Одесса + Львов (€) · всего {grand.toFixed(2)} €
+              </div>
+              <ReactApexChart options={chart1Options} series={chart1Series} type="line" height={360} />
+            </div>
+            <div style={styles.chartBox}>
+              <div style={styles.chartTitle}>
+                Доход: Варшава (zł) · всего {(warsaw?.total || 0).toFixed(2)} zł
+              </div>
+              <ReactApexChart options={chart2Options} series={chart2Series} type="bar" height={360} />
+            </div>
+          </div>
+        );
+      })()}
 
       <h2 style={styles.sectionTitle}>Теги{totalSelected > 0 ? ` · выбрано ${totalSelected}` : ''}</h2>
       <div style={styles.grid}>
@@ -284,6 +381,13 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none', borderRadius: '8px', padding: '10px 18px', background: '#4f46e5', color: '#fff',
     fontSize: '14px', fontWeight: 600, cursor: 'pointer',
   },
+  buildBtn: {
+    border: 'none', borderRadius: '8px', padding: '10px 18px', background: '#16a34a', color: '#fff',
+    fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+  },
+  charts: { display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '28px' },
+  chartBox: { background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' },
+  chartTitle: { fontSize: '15px', fontWeight: 600, color: '#1a1a2e', marginBottom: '12px' },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' },
   card: {
     background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px',

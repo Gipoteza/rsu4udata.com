@@ -446,6 +446,86 @@ export const KommoService = {
     });
   },
 
+  // Доход по дням: сумма price лидов, которые в выбранных статусах (воронках)
+  // и с выбранными тегами (forecast_tag_map / forecast_status_map), за период.
+  async getForecastRevenueDaily(branchId: number, from: string, to: string) {
+    const acc = await db('kommo_accounts').where({ branch_id: branchId }).first();
+    if (!acc || !acc.access_token_enc) throw new Error('Аккаунт не подключён');
+    const token = OAuthHelper.decrypt(acc.access_token_enc);
+    const headers = { Authorization: `Bearer ${token}` };
+
+    // Выбранные теги и статусы
+    const tagMap = await db('forecast_tag_map').where({ branch_id: branchId }).first();
+    const statusMap = await db('forecast_status_map').where({ branch_id: branchId }).first();
+    let tagNames: string[] = [];
+    let statusNames: string[] = [];
+    try { tagNames = tagMap ? JSON.parse(tagMap.tag_names) : []; } catch { tagNames = []; }
+    try { statusNames = statusMap ? JSON.parse(statusMap.status_names) : []; } catch { statusNames = []; }
+    const tagSet = new Set(tagNames.map((t) => t.toLowerCase()));
+    const statusSet = new Set(statusNames.map((s) => s.toLowerCase()));
+
+    // Карта status_id -> name
+    const pipesResp = await fetch(`${acc.base_domain}/api/v4/leads/pipelines`, { headers });
+    const statusIdToName = new Map<number, string>();
+    if (pipesResp.ok) {
+      const pdata = (await pipesResp.json()) as any;
+      (pdata?._embedded?.pipelines || []).forEach((p: any) => {
+        (p?._embedded?.statuses || []).forEach((s: any) => statusIdToName.set(s.id, s.name));
+      });
+    }
+
+    // Границы периода
+    const fromTs = Math.floor(new Date(`${from}T00:00:00`).getTime() / 1000);
+    const toTs = Math.floor(new Date(`${to}T23:59:59`).getTime() / 1000);
+
+    // Карта дней
+    const byDay = new Map<string, number>();
+    const labels: string[] = [];
+    const start = new Date(`${from}T00:00:00`);
+    const end = new Date(`${to}T00:00:00`);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const key = d.toISOString().slice(0, 10);
+      byDay.set(key, 0);
+      labels.push(key);
+    }
+
+    let page = 1;
+    const maxPages = 60;
+    while (page <= maxPages) {
+      const url = `${acc.base_domain}/api/v4/leads?with=tags&limit=250&page=${page}`
+        + `&filter[created_at][from]=${fromTs}&filter[created_at][to]=${toTs}`;
+      const resp = await fetch(url, { headers });
+      if (resp.status === 204) break;
+      if (!resp.ok) throw new Error(`Kommo вернул ${resp.status} при запросе лидов`);
+      const data = (await resp.json()) as any;
+      const leads: any[] = data?._embedded?.leads || [];
+      if (leads.length === 0) break;
+
+      for (const lead of leads) {
+        // Фильтр по статусу (воронке)
+        if (statusSet.size > 0) {
+          const sName = (statusIdToName.get(lead.status_id) || '').toLowerCase();
+          if (!statusSet.has(sName)) continue;
+        }
+        // Фильтр по тегам
+        if (tagSet.size > 0) {
+          const tags: any[] = lead?._embedded?.tags || [];
+          const hasTag = tags.some((t) => tagSet.has(String(t.name || '').toLowerCase()));
+          if (!hasTag) continue;
+        }
+        const createdTs = Number(lead.created_at) * 1000;
+        const key = new Date(createdTs).toISOString().slice(0, 10);
+        if (byDay.has(key)) byDay.set(key, byDay.get(key)! + (Number(lead.price) || 0));
+      }
+
+      if (!data?._links?.next) break;
+      page++;
+    }
+
+    const series = labels.map((k) => Number((byDay.get(k) || 0).toFixed(2)));
+    return { branchId, labels, series, total: Number(series.reduce((a, b) => a + b, 0).toFixed(2)) };
+  },
+
   redirectUri(): string {
     return REDIRECT_URI;
   },

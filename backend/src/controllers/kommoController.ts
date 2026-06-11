@@ -15,6 +15,25 @@ router.get('/status', requireAuth, async (_req: Request, res: Response) => {
   }
 });
 
+// GET /api/integrations/kommo/forecast-revenue/:branchId?from=&to=
+router.get('/forecast-revenue/:branchId', requireAuth, async (req: Request, res: Response) => {
+  const branchId = Number(req.params.branchId);
+  const from = req.query.from as string;
+  const to = req.query.to as string;
+  if (![1, 2, 3, 4].includes(branchId)) {
+    return res.status(400).json({ error: 'Invalid branchId' });
+  }
+  if (!from || !to) {
+    return res.status(400).json({ error: 'from и to обязательны' });
+  }
+  try {
+    const result = await KommoService.getForecastRevenueDaily(branchId, from, to);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
 // GET /api/integrations/kommo/statuses/:branchId — список статусов воронок
 router.get('/statuses/:branchId', requireAuth, async (req: Request, res: Response) => {
   const branchId = Number(req.params.branchId);
