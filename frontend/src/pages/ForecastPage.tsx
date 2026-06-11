@@ -220,12 +220,14 @@ export default function ForecastPage() {
           <span style={styles.dash}>—</span>
           <input type="date" style={styles.dateInput} value={toDate} onChange={(e) => setToDate(e.target.value)} />
         </div>
-        <button style={styles.saveBtn} onClick={handleSave} disabled={saving}>
-          {saving ? 'Сохранение...' : 'Сохранить теги и воронки'}
-        </button>
-        <button style={styles.buildBtn} onClick={() => handleBuild()} disabled={building}>
-          {building ? 'Строим...' : 'Построить графики'}
-        </button>
+        <div style={styles.btnGroup}>
+          <button style={styles.saveBtn} onClick={handleSave} disabled={saving}>
+            {saving ? 'Сохранение...' : 'Сохранить теги и воронки'}
+          </button>
+          <button style={styles.buildBtn} onClick={() => handleBuild()} disabled={building}>
+            {building ? 'Строим...' : 'Построить графики'}
+          </button>
+        </div>
       </div>
 
       {/* Индикатор построения */}
@@ -426,6 +428,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none', borderRadius: '8px', padding: '10px 18px', background: '#16a34a', color: '#fff',
     fontSize: '14px', fontWeight: 600, cursor: 'pointer',
   },
+  btnGroup: { display: 'flex', gap: '10px' },
   charts: { display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '28px' },
   chartBox: { background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' },
   chartTitle: { fontSize: '15px', fontWeight: 600, color: '#1a1a2e', marginBottom: '12px' },
