@@ -54,6 +54,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <button style={styles.menuItem} onClick={() => go('/dashboard/integrations')}>🔌 Kommo CRM</button>
             <button style={styles.menuItem} onClick={() => go('/dashboard/facebook')}>📘 Facebook Ads</button>
 
+            <div style={styles.menuSection}>Клієнти</div>
+            <button style={styles.menuItem} onClick={() => go('/dashboard/import-clients')}>📥 Імпорт клієнтів</button>
+
             <div style={styles.divider} />
             <button style={{ ...styles.menuItem, color: '#e53e3e' }} onClick={() => logout()}>🚪 Выйти</button>
           </div>

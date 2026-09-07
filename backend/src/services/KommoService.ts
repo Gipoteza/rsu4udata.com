@@ -4,6 +4,20 @@ import { OAuthHelper } from './OAuthHelper';
 const REDIRECT_URI = process.env.KOMMO_REDIRECT_URI
   || 'https://api.rsu4udata.com/api/integrations/kommo/callback';
 
+// Максимум строк за один импорт (защита от таймаута запроса)
+const MAX_IMPORT_PHONES = 500;
+
+// Строка таблицы импорта клиентов
+export interface ImportRow {
+  name: string;
+  phone: string;
+  note: string;
+}
+
+export type ImportRowInput =
+  | string
+  | (string | { name?: string; phone?: string; note?: string; description?: string })[];
+
 interface KommoTokenResponse {
   token_type: string;
   expires_in: number;
@@ -546,6 +560,293 @@ export const KommoService = {
     const total = Number(series.reduce((a, b) => a + b, 0).toFixed(2));
     console.log(`[FORECAST] branch=${branchId} TOTAL=${total}`);
     return { branchId, labels, series, total };
+  },
+
+  // ---------------------------------------------------------------------------
+  // Импорт клиентов: создание сделок в Kommo по таблице (имя / телефон / описание)
+  // ---------------------------------------------------------------------------
+
+  // Нормализация номера: убираем всё кроме цифр и ведущего "+"
+  normalizePhone(raw: string): string | null {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) return null;
+    const hasPlus = trimmed.startsWith('+');
+    const digits = trimmed.replace(/\D/g, '');
+    if (digits.length < 9 || digits.length > 15) return null;
+    return (hasPlus ? '+' : '') + digits;
+  },
+
+  /**
+   * Приводит входные данные к списку строк { name, phone, note }.
+   * Дату создания сделки проставляет сам Kommo.
+   * Поддерживает:
+   *  - массив объектов { name, phone, note } (из таблицы на фронте)
+   *  - массив строк "Имя<TAB>Телефон<TAB>Описание"
+   *  - один текст, вставленный из Google Sheets / Excel (TSV) или CSV
+   */
+  parseImportRows(input: ImportRowInput): { rows: ImportRow[]; invalid: string[] } {
+    const rows: ImportRow[] = [];
+    const invalid: string[] = [];
+    const seenPhones = new Set<string>();
+
+    const pushRow = (name: string, phoneRaw: string, note: string, sourceLabel: string) => {
+      const phone = this.normalizePhone(phoneRaw);
+      if (!phone) {
+        if (sourceLabel.trim()) invalid.push(sourceLabel.trim());
+        return;
+      }
+      if (seenPhones.has(phone)) return; // дубликаты внутри списка отбрасываем
+      seenPhones.add(phone);
+      rows.push({ name: name.trim(), phone, note: note.trim() });
+    };
+
+    // Разбор одной текстовой строки: колонки разделены табом, ; или ,
+    const parseLine = (line: string) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      const cells = line.split(/\t|;|,/).map((c) => c.trim());
+      if (cells.length === 1) {
+        // Только номер
+        pushRow('', cells[0], '', trimmed);
+        return;
+      }
+      // Определяем, где номер: первая ячейка, похожая на телефон
+      const phoneIdx = cells.findIndex((c) => this.normalizePhone(c) !== null);
+      if (phoneIdx === -1) {
+        invalid.push(trimmed);
+        return;
+      }
+      const name = cells.slice(0, phoneIdx).join(' ').trim();
+      const note = cells.slice(phoneIdx + 1).join(' ').trim();
+      pushRow(name, cells[phoneIdx], note, trimmed);
+    };
+
+    if (typeof input === 'string') {
+      input.split(/\r?\n/).forEach(parseLine);
+    } else if (Array.isArray(input)) {
+      input.forEach((item) => {
+        if (typeof item === 'string') {
+          parseLine(item);
+        } else if (item && typeof item === 'object') {
+          const name = String((item as any).name ?? '');
+          const phone = String((item as any).phone ?? '');
+          const note = String((item as any).note ?? (item as any).description ?? '');
+          pushRow(name, phone, note, [name, phone].filter(Boolean).join(' '));
+        }
+      });
+    }
+
+    return { rows, invalid };
+  },
+
+  // Находит id системного поля PHONE у контактов (нужно для custom_fields_values)
+  async findContactPhoneFieldId(baseDomain: string, token: string): Promise<number | null> {
+    let page = 1;
+    const maxPages = 5;
+    while (page <= maxPages) {
+      const resp = await fetch(`${baseDomain}/api/v4/contacts/custom_fields?limit=250&page=${page}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (resp.status === 204) break;
+      if (!resp.ok) break;
+      const data = (await resp.json()) as any;
+      const fields: any[] = data?._embedded?.custom_fields || [];
+      const phoneField = fields.find((f) => String(f.code || '').toUpperCase() === 'PHONE');
+      if (phoneField) return phoneField.id;
+      if (!data?._links?.next) break;
+      page++;
+    }
+    return null;
+  },
+
+  /**
+   * Создаёт сделки в Kommo выбранного города по таблице клиентов.
+   * Каждая строка: имя, телефон, описание.
+   * Сделка создаётся вместе с контактом (номер пишется в поле PHONE),
+   * помечается выбранными тегами города, описание добавляется примечанием.
+   */
+  async importClients(
+    branchId: number,
+    rowsInput: ImportRowInput,
+    tagNames: string[] = [],
+  ) {
+    const acc = await db('kommo_accounts').where({ branch_id: branchId }).first();
+    if (!acc || !acc.access_token_enc) throw new Error('Аккаунт Kommo не подключён для этого города');
+
+    const token = OAuthHelper.decrypt(acc.access_token_enc);
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+
+    const { rows, invalid } = this.parseImportRows(rowsInput);
+    if (rows.length === 0) {
+      throw new Error('Не найдено ни одного корректного номера');
+    }
+    if (rows.length > MAX_IMPORT_PHONES) {
+      throw new Error(`Слишком много строк (${rows.length}). Максимум за раз — ${MAX_IMPORT_PHONES}`);
+    }
+
+    // Теги: если имя есть в Kommo — передаём по id, иначе по имени (Kommo создаст новый)
+    const cleanTagNames = (tagNames || []).map((t) => String(t).trim()).filter(Boolean);
+    let tagPayload: { id?: number; name?: string }[] = [];
+    if (cleanTagNames.length > 0) {
+      let existing: { id: number; name: string }[] = [];
+      try {
+        existing = await this.listTags(branchId);
+      } catch {
+        existing = [];
+      }
+      const byName = new Map(existing.map((t) => [t.name.toLowerCase(), t.id]));
+      tagPayload = cleanTagNames.map((name) => {
+        const id = byName.get(name.toLowerCase());
+        return id ? { id } : { name };
+      });
+    }
+
+    const phoneFieldId = await this.findContactPhoneFieldId(acc.base_domain, token);
+
+    const created: {
+      name: string;
+      phone: string;
+      leadId: number;
+      contactId: number | null;
+      merged: boolean;
+    }[] = [];
+    const failed: { phone: string; error: string }[] = [];
+    // Примечания добавляем отдельным запросом после создания сделок
+    const pendingNotes: any[] = [];
+
+    const BATCH_SIZE = 50; // ограничение Kommo для /leads/complex
+    for (let start = 0; start < rows.length; start += BATCH_SIZE) {
+      const batch = rows.slice(start, start + BATCH_SIZE);
+
+      const body = batch.map((row, i) => {
+        const phoneValue = phoneFieldId
+          ? { field_id: phoneFieldId, values: [{ value: row.phone, enum_code: 'WORK' }] }
+          : { field_code: 'PHONE', values: [{ value: row.phone, enum_code: 'WORK' }] };
+
+        const displayName = row.name || row.phone;
+        const lead: any = {
+          name: displayName,
+          request_id: String(start + i),
+          _embedded: {
+            contacts: [{
+              first_name: displayName,
+              custom_fields_values: [phoneValue],
+            }],
+          },
+        };
+        if (tagPayload.length > 0) lead._embedded.tags = tagPayload;
+        return lead;
+      });
+
+      try {
+        const resp = await fetch(`${acc.base_domain}/api/v4/leads/complex`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        });
+
+        if (!resp.ok) {
+          const text = await resp.text();
+          const message = `Kommo вернул ${resp.status}: ${text.slice(0, 300)}`;
+          console.error(`[IMPORT] branch=${branchId} batch=${start} error: ${message}`);
+          batch.forEach((row) => failed.push({ phone: row.phone, error: message }));
+          continue;
+        }
+
+        const results = (await resp.json()) as any[];
+        const list = Array.isArray(results) ? results : [];
+
+        // Сопоставляем ответ со строками через request_id
+        const answered = new Set<string>();
+        list.forEach((r) => {
+          const requestIds: string[] = Array.isArray(r?.request_id) ? r.request_id.map(String) : [];
+          requestIds.forEach((rid) => {
+            const idx = Number(rid);
+            const row = rows[idx];
+            if (!row) return;
+            answered.add(row.phone);
+            created.push({
+              name: row.name || row.phone,
+              phone: row.phone,
+              leadId: r.id,
+              contactId: r.contact_id ?? null,
+              merged: !!r.merged,
+            });
+            if (row.note && r.id) {
+              pendingNotes.push({
+                entity_id: r.id,
+                note_type: 'common',
+                params: { text: row.note },
+              });
+            }
+          });
+        });
+
+        batch.forEach((row) => {
+          if (!answered.has(row.phone)) {
+            failed.push({ phone: row.phone, error: 'Kommo не вернул результат для номера' });
+          }
+        });
+      } catch (err: any) {
+        const message = err?.message || 'Неизвестная ошибка запроса к Kommo';
+        console.error(`[IMPORT] branch=${branchId} batch=${start} exception: ${message}`);
+        batch.forEach((row) => failed.push({ phone: row.phone, error: message }));
+      }
+
+      // Небольшая пауза между батчами — Kommo ограничивает частоту запросов
+      if (start + BATCH_SIZE < rows.length) {
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    }
+
+    // Добавляем описания как примечания к созданным сделкам
+    let notesAdded = 0;
+    const noteErrors: string[] = [];
+    for (let start = 0; start < pendingNotes.length; start += BATCH_SIZE) {
+      const chunk = pendingNotes.slice(start, start + BATCH_SIZE);
+      try {
+        const resp = await fetch(`${acc.base_domain}/api/v4/leads/notes`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(chunk),
+        });
+        if (resp.ok) {
+          notesAdded += chunk.length;
+        } else {
+          const text = await resp.text();
+          const message = `Примечания: Kommo вернул ${resp.status}: ${text.slice(0, 200)}`;
+          console.error(`[IMPORT] branch=${branchId} notes error: ${message}`);
+          noteErrors.push(message);
+        }
+      } catch (err: any) {
+        const message = err?.message || 'Ошибка при добавлении примечаний';
+        console.error(`[IMPORT] branch=${branchId} notes exception: ${message}`);
+        noteErrors.push(message);
+      }
+      if (start + BATCH_SIZE < pendingNotes.length) {
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    }
+
+    const mergedCount = created.filter((c) => c.merged).length;
+    console.log(`[IMPORT] branch=${branchId} total=${rows.length} created=${created.length} merged=${mergedCount} failed=${failed.length} notes=${notesAdded}`);
+
+    return {
+      branchId,
+      requested: rows.length,
+      createdCount: created.length - mergedCount,
+      mergedCount,
+      failedCount: failed.length,
+      notesAdded,
+      noteErrors,
+      invalid,
+      tags: cleanTagNames,
+      created,
+      failed,
+    };
   },
 
   redirectUri(): string {

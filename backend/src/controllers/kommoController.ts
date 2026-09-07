@@ -15,6 +15,10 @@ router.get('/status', requireAuth, async (_req: Request, res: Response) => {
   }
 });
 
+// Кеш результатов прогноза для мгновенной отдачи
+const forecastCache = new Map<string, { data: any; ts: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 минут
+
 // GET /api/integrations/kommo/forecast-revenue/:branchId?from=&to=
 router.get('/forecast-revenue/:branchId', requireAuth, async (req: Request, res: Response) => {
   const branchId = Number(req.params.branchId);
@@ -28,10 +32,16 @@ router.get('/forecast-revenue/:branchId', requireAuth, async (req: Request, res:
   if (!from || !to) {
     return res.status(400).json({ error: 'from и to обязательны' });
   }
+  const cacheKey = `${branchId}|${from}|${to}|${statusesParam || ''}|${tagsParam || ''}`;
+  const cached = forecastCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return res.json(cached.data);
+  }
   try {
     const statuses = statusesParam ? statusesParam.split('|').filter(Boolean) : undefined;
     const tags = tagsParam ? tagsParam.split('|').filter(Boolean) : undefined;
     const result = await KommoService.getForecastRevenueDaily(branchId, from, to, statuses, tags);
+    forecastCache.set(cacheKey, { data: result, ts: Date.now() });
     return res.json(result);
   } catch (err: any) {
     return res.status(400).json({ error: err.message });
@@ -167,6 +177,30 @@ router.get('/leads-daily/:branchId', requireAuth, async (req: Request, res: Resp
     return res.json(result);
   } catch (err: any) {
     console.error('[KOMMO] leads-daily error:', err.message);
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/integrations/kommo/import-clients/:branchId — импорт клиентов (создание сделок)
+// body: { rows: [{ name, phone, note }] | string, tagNames: string[] }
+router.post('/import-clients/:branchId', requireAuth, async (req: Request, res: Response) => {
+  const branchId = Number(req.params.branchId);
+  const { rows, phones, tagNames } = req.body;
+  const input = rows ?? phones; // phones — обратная совместимость
+  if (![1, 2, 3, 4].includes(branchId)) {
+    return res.status(400).json({ error: 'Invalid branchId' });
+  }
+  if (!input || (typeof input !== 'string' && !Array.isArray(input))) {
+    return res.status(400).json({ error: 'rows обязателен (массив строк таблицы или текст)' });
+  }
+  if (tagNames !== undefined && !Array.isArray(tagNames)) {
+    return res.status(400).json({ error: 'tagNames должен быть массивом' });
+  }
+  try {
+    const result = await KommoService.importClients(branchId, input, tagNames || []);
+    return res.json(result);
+  } catch (err: any) {
+    console.error('[KOMMO] import-clients error:', err.message);
     return res.status(400).json({ error: err.message });
   }
 });

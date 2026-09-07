@@ -9,6 +9,7 @@ import IntegrationsPage from './pages/IntegrationsPage';
 import FacebookPage from './pages/FacebookPage';
 import CeoOverviewPage from './pages/CeoOverviewPage';
 import ForecastPage from './pages/ForecastPage';
+import ImportClientsPage from './pages/ImportClientsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,6 +56,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <DashboardLayout><ForecastPage /></DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/import-clients"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout><ImportClientsPage /></DashboardLayout>
                 </ProtectedRoute>
               }
             />
